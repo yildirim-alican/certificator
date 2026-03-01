@@ -27,7 +27,10 @@ import { CertificateElement } from '@/types/CertificateTemplate';
 export default function EditorPage() {
   const params = useParams();
   const router = useRouter();
-  const templateId = params.id as string;
+  const rawTemplateId = params?.id;
+  const templateId = Array.isArray(rawTemplateId)
+    ? rawTemplateId[0]
+    : rawTemplateId || 'untitled-template';
 
   const template = useEditorStore((state) => state.template);
   const setTemplate = useEditorStore((state) => state.setTemplate);
