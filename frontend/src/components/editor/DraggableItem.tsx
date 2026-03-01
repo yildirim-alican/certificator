@@ -114,10 +114,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
         };
 
     // Resize handles
-    const ResizeHandle: React.FC<{ handle: ResizeHandle; icon: string }> = ({
-      handle,
-      icon,
-    }) => (
+    const ResizeHandle: React.FC<{ handle: ResizeHandle }> = ({ handle }) => (
       <div
         onMouseDown={(e) => handleMouseDown(e, handle)}
         style={{
@@ -214,14 +211,14 @@ const DraggableItem = React.memo<DraggableItemProps>(
           {/* Resize Handles (only show when selected) */}
           {isSelected && (
             <>
-              <ResizeHandle handle="nw" icon="↖" />
-              <ResizeHandle handle="ne" icon="↗" />
-              <ResizeHandle handle="se" icon="↘" />
-              <ResizeHandle handle="sw" icon="↙" />
-              <ResizeHandle handle="n" icon="↑" />
-              <ResizeHandle handle="e" icon="→" />
-              <ResizeHandle handle="s" icon="↓" />
-              <ResizeHandle handle="w" icon="←" />
+              <ResizeHandle handle="nw" />
+              <ResizeHandle handle="ne" />
+              <ResizeHandle handle="se" />
+              <ResizeHandle handle="sw" />
+              <ResizeHandle handle="n" />
+              <ResizeHandle handle="e" />
+              <ResizeHandle handle="s" />
+              <ResizeHandle handle="w" />
             </>
           )}
         </div>

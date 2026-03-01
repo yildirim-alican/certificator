@@ -1,8 +1,6 @@
 import { useCallback, useState } from 'react';
 import { CertificateElement } from '@/types/CertificateTemplate';
 
-const A4_WIDTH_MM = 210;
-const A4_HEIGHT_MM = 297;
 const A4_WIDTH_PX = 1240; // At 150 DPI
 const A4_HEIGHT_PX = 1754; // At 150 DPI
 

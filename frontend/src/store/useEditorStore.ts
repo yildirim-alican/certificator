@@ -32,7 +32,7 @@ interface EditorStoreState {
   reset: () => void;
 }
 
-export const useEditorStore = create<EditorStoreState>((set, get) => ({
+export const useEditorStore = create<EditorStoreState>((set) => ({
   template: null,
   setTemplate: (template) => set({ template }),
   updateTemplateMetadata: (name, description) =>

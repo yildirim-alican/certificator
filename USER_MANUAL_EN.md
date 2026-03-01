@@ -61,21 +61,39 @@ docker-compose down
 
 Use this if you prefer running frontend/backend manually.
 
+Recommended Python versions: **3.12.x or 3.14.x**.
+
 #### Start Backend
 
 ```bash
+# Run from project root (certificator/)
 cd backend
-python -m venv venv
-venv\Scripts\activate
+py -3.12 -m venv venv
+# Git Bash:
+source venv/Scripts/activate
+# PowerShell:
+# .\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
-playwright install chromium
+python -m playwright install chromium
 python main.py
 ```
+
+If you are already in `backend/`, skip `cd backend`.
 
 #### Start Frontend (new terminal window)
 
 ```bash
+# Open a NEW terminal in project root (certificator/)
 cd frontend
+npm install
+npm run dev
+```
+
+If your terminal is still in `backend/`, use:
+
+```bash
+cd ../frontend
 npm install
 npm run dev
 ```

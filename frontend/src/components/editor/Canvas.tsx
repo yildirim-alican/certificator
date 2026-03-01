@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
-import { CertificateElement } from '@/types/CertificateTemplate';
 import DraggableItem from './DraggableItem';
 
 interface CanvasProps {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { CertificateTemplate } from '@/types/CertificateTemplate';
 import { useExcelParser } from '@/hooks/useExcelParser';
 import { useConfetti } from '@/hooks/useConfetti';
@@ -8,8 +8,7 @@ import ExcelUploader from '@/components/excel/ExcelUploader';
 import ColumnMapper from '@/components/excel/ColumnMapper';
 import DataPreview from '@/components/excel/DataPreview';
 import SuccessModal from '@/components/excel/SuccessModal';
-import Button from '@/components/shared/Button';
-import { Download, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 
 interface BulkGenerationProps {
   template: CertificateTemplate;
@@ -33,12 +32,12 @@ export const BulkGenerationWorkflow: React.FC<BulkGenerationProps> = ({
   onGenerationStart,
   onGenerationComplete,
 }) => {
-  const { parseExcelFile, autoMapColumns } = useExcelParser();
+  const { parseExcel, calculateMappings } = useExcelParser();
   const { triggerConfetti } = useConfetti();
   const containerRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<WorkflowStep>('upload');
   const [excelData, setExcelData] = useState<{
-    columns: string[];
+    headers: string[];
     rows: Record<string, string>[];
   } | null>(null);
   const [columnMappings, setColumnMappings] = useState<
@@ -57,12 +56,18 @@ export const BulkGenerationWorkflow: React.FC<BulkGenerationProps> = ({
     setError(null);
 
     try {
-      const result = await parseExcelFile(file);
+      const result = await parseExcel(file);
       if (result) {
         setExcelData(result);
 
         // Auto-map columns
-        const autoMappings = autoMapColumns(result.columns, templateVariables);
+        const autoMappings = calculateMappings(templateVariables, result.headers).map(
+          (mapping) => ({
+            excelColumn: mapping.sourceColumn,
+            templateVariable: mapping.targetVariable,
+            confidence: mapping.matchScore,
+          })
+        );
         setColumnMappings(autoMappings);
 
         setStep('mapping');
@@ -213,7 +218,7 @@ export const BulkGenerationWorkflow: React.FC<BulkGenerationProps> = ({
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Match Your Data</h2>
             <ColumnMapper
-              excelColumns={excelData.columns}
+              excelColumns={excelData.headers}
               templateVariables={templateVariables}
               autoMappings={columnMappings}
               onMappingComplete={handleMappingComplete}

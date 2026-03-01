@@ -1,4 +1,4 @@
-import { CertificateTemplate, CertificateElement } from '@/types/CertificateTemplate';
+import { CertificateTemplate } from '@/types/CertificateTemplate';
 
 /**
  * Converts Certificate Template + Data to HTML
@@ -15,15 +15,11 @@ export const generateTemplateHTML = (
   template: CertificateTemplate,
   data: Record<string, string> = {}
 ): string => {
-  const A4_WIDTH = 210; // mm
-  const A4_HEIGHT = 297; // mm
   const A4_WIDTH_PX_300DPI = 3508; // pixels at 300 DPI
   const A4_HEIGHT_PX_300DPI = 2480; // pixels at 300 DPI
 
   // Determine canvas dimensions based on orientation
   const isLandscape = template.orientation === 'landscape';
-  const width = isLandscape ? A4_HEIGHT : A4_WIDTH;
-  const height = isLandscape ? A4_WIDTH : A4_HEIGHT;
 
   const widthPx = isLandscape ? A4_HEIGHT_PX_300DPI : A4_WIDTH_PX_300DPI;
   const heightPx = isLandscape ? A4_WIDTH_PX_300DPI : A4_HEIGHT_PX_300DPI;

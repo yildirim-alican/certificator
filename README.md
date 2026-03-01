@@ -74,19 +74,37 @@ Backend: http://localhost:8000/api/v1
 
 ### Manual Setup
 
+> Recommended Python versions: **3.12.x or 3.14.x**
+
 #### Backend
 ```bash
+# Run from project root (certificator/)
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+py -3.12 -m venv venv
+# Git Bash (inside backend/):
+source venv/Scripts/activate
+# PowerShell (inside backend/):
+# .\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
-playwright install chromium
+python -m playwright install chromium
 python main.py
 ```
 
+If you are already inside `backend/`, do **not** run `cd backend` again.
+
 #### Frontend
 ```bash
+# Open a NEW terminal in project root (certificator/)
 cd frontend
+npm install
+npm run dev
+```
+
+If your current terminal is still inside `backend/`, use:
+
+```bash
+cd ../frontend
 npm install
 npm run dev
 ```

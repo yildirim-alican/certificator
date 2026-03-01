@@ -21,7 +21,6 @@ import { ArrowLeft, AlertCircle } from 'lucide-react';
 export default function BulkGeneratePage() {
   const router = useRouter();
   const template = useEditorStore((state) => state.template);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
   if (!template) {
@@ -48,7 +47,6 @@ export default function BulkGeneratePage() {
   const handleGenerationStart = async (
     data: Record<string, string>[]
   ): Promise<void> => {
-    setIsGenerating(true);
     setGenerationError(null);
 
     try {
@@ -94,8 +92,6 @@ export default function BulkGeneratePage() {
       const message = error instanceof Error ? error.message : 'Unknown error occurred';
       setGenerationError(message);
       throw error;
-    } finally {
-      setIsGenerating(false);
     }
   };
 

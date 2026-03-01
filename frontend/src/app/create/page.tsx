@@ -12,15 +12,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTemplateStore } from '@/store/useTemplateStore';
-import { useApi } from '@/hooks/useApi';
 import Button from '@/components/shared/Button';
 import Input from '@/components/shared/Input';
 import { ArrowRight } from 'lucide-react';
-import { v4 as uuid } from 'crypto';
 
 export default function CreateTemplatePage() {
   const router = useRouter();
-  const { post } = useApi();
   const addTemplate = useTemplateStore((state) => state.addTemplate);
 
   const [formData, setFormData] = useState({

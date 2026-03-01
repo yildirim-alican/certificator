@@ -36,11 +36,13 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
   const [showAnimation, setShowAnimation] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      setShowAnimation(false);
-      const timer = setTimeout(() => setShowAnimation(true), 100);
-      return () => clearTimeout(timer);
+    if (!isOpen) {
+      return;
     }
+
+    setShowAnimation(false);
+    const timer = setTimeout(() => setShowAnimation(true), 100);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   if (!isOpen) return null;

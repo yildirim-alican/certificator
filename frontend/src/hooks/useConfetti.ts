@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-
 interface ConfettiPiece {
   id: string;
   x: number;
@@ -21,7 +19,6 @@ export const useConfetti = () => {
   const triggerConfetti = (container: HTMLElement | null) => {
     if (!container) return;
 
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
     const confettiPieces: ConfettiPiece[] = [];
 
     // Create confetti pieces

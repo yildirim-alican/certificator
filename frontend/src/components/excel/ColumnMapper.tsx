@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import Button from '@/components/shared/Button';
-import Select from '@/components/shared/Select';
 
 interface ColumnMapping {
   excelColumn: string;
@@ -93,12 +92,9 @@ export const ColumnMapper: React.FC<ColumnMapperProps> = ({
 
       {/* Mappings List */}
       <div className="space-y-3">
-        {mappings.map((mapping, idx) => {
+        {mappings.map((mapping) => {
           const confidenceColor = getConfidenceColor(mapping.confidence);
           const confidenceLabel = getConfidenceLabel(mapping.confidence);
-          const isRequired = templateVariables.some(
-            (v) => v === mapping.templateVariable && v.includes('Name')
-          );
 
           return (
             <div
