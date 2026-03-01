@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Canvas from '@/components/editor/Canvas';
 import Toolbar from '@/components/editor/Toolbar';
 import PropertyPanel from '@/components/editor/PropertyPanel';
@@ -10,7 +10,7 @@ import AddElementForm from '@/components/editor/AddElementForm';
 import ExportModal from '@/components/editor/ExportModal';
 import Button from '@/components/shared/Button';
 import Input from '@/components/shared/Input';
-import { Save, Download, Eye } from 'lucide-react';
+import { Save, Download, Eye, FileText } from 'lucide-react';
 
 /**
  * Editor Page
@@ -25,6 +25,7 @@ import { Save, Download, Eye } from 'lucide-react';
  */
 export default function EditorPage() {
   const params = useParams();
+  const router = useRouter();
   const templateId = params.id as string;
 
   const template = useEditorStore((state) => state.template);
@@ -86,6 +87,11 @@ export default function EditorPage() {
     setShowExportModal(true);
   };
 
+  const handleBulkGenerate = () => {
+    if (!template) return;
+    router.push('/bulk-generate');
+  };
+
   if (!template) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -124,6 +130,14 @@ export default function EditorPage() {
             >
               <Download size={18} />
               Export PDF
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleBulkGenerate}
+              className="flex items-center gap-2"
+            >
+              <FileText size={18} />
+              Bulk Generate
             </Button>
             <Button
               variant="primary"
