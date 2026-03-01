@@ -11,7 +11,7 @@ import InlineElementEditor from '@/components/editor/InlineElementEditor';
 import ExportModal from '@/components/editor/ExportModal';
 import Button from '@/components/shared/Button';
 import Input from '@/components/shared/Input';
-import { Save, Download, Eye, FileText, Home } from 'lucide-react';
+import { Save, Download, Eye, FileText, Home, Sparkles } from 'lucide-react';
 import { CertificateElement } from '@/types/CertificateTemplate';
 import {
   LayoutOrientation,
@@ -346,85 +346,60 @@ export default function EditorPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
-      {/* Header */}
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-100 via-slate-100 to-gray-200">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200 shadow-sm">
-        <div className="px-4 lg:px-6 py-3 space-y-3">
-          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => router.push('/')}
-                className="flex items-center gap-2"
-              >
-                <Home size={18} />
-                Main Menu
-              </Button>
-              <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                {template.orientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait'}
-              </span>
-              <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                {elements.length} Elements
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setShowPreview(!showPreview)}
-                className="flex items-center gap-2"
-              >
-                <Eye size={18} />
-                {showPreview ? 'Edit Mode' : 'Preview'}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleDownloadPDF}
-                className="flex items-center gap-2"
-              >
-                <Download size={18} />
-                Export PDF
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleBulkGenerate}
-                className="flex items-center gap-2"
-              >
-                <FileText size={18} />
-                Bulk Generate
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] gap-2 items-center">
-            <Input
-              value={template.name}
-              onChange={(e) => updateTemplateMetadata(e.target.value, template.description)}
-              className="text-base font-semibold"
-              placeholder="Template name"
-            />
-            <Input
-              value={template.description || ''}
-              onChange={(e) => updateTemplateMetadata(template.name, e.target.value)}
-              placeholder="Template description"
-            />
+        <div className="px-4 lg:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div className="flex items-center gap-2">
             <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={isSaving || !template.name.trim()}
-              className="flex items-center justify-center gap-2 xl:min-w-[140px]"
+              variant="secondary"
+              onClick={() => router.push('/')}
+              className="flex items-center gap-2"
             >
-              <Save size={18} />
-              {isSaving ? 'Creating...' : 'Create'}
+              <Home size={18} />
+              Main Menu
             </Button>
+            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
+              <Sparkles size={12} />
+              {template.orientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait'}
+            </span>
+            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+              {elements.length} Elements
+            </span>
           </div>
+
+          <nav className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={showPreview ? 'primary' : 'secondary'}
+              onClick={() => setShowPreview(!showPreview)}
+              className="flex items-center gap-2"
+            >
+              <Eye size={18} />
+              {showPreview ? 'Edit' : 'Preview'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleDownloadPDF}
+              className="flex items-center gap-2"
+            >
+              <Download size={18} />
+              Export
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleBulkGenerate}
+              className="flex items-center gap-2"
+            >
+              <FileText size={18} />
+              Bulk Generate
+            </Button>
+          </nav>
         </div>
       </header>
 
       {/* Main Editor */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {!showPreview && (
-          <div className="w-full lg:w-80 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 p-4 lg:p-6 overflow-y-auto max-h-screen">
+          <div className="w-full lg:w-[360px] bg-white border-b lg:border-b-0 lg:border-r border-gray-200 p-4 lg:p-5 overflow-y-auto max-h-screen">
             <SystemLayoutPicker
               presets={systemLayoutPresets}
               activePresetId={activePresetId}
@@ -438,13 +413,37 @@ export default function EditorPage() {
           </div>
         )}
 
-        {/* Center: Canvas */}
-        <Canvas orientation={template.orientation} backgroundColor={template.backgroundColor} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Canvas orientation={template.orientation} backgroundColor={template.backgroundColor} />
 
+          {!showPreview && <Toolbar />}
+
+          <div className="bg-white border-t border-gray-200 p-3 lg:p-4">
+            <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] gap-2 items-center">
+              <Input
+                value={template.name}
+                onChange={(e) => updateTemplateMetadata(e.target.value, template.description)}
+                className="text-base font-semibold"
+                placeholder="Template name"
+              />
+              <Input
+                value={template.description || ''}
+                onChange={(e) => updateTemplateMetadata(template.name, e.target.value)}
+                placeholder="Template description"
+              />
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={isSaving || !template.name.trim()}
+                className="flex items-center justify-center gap-2 xl:min-w-[150px]"
+              >
+                <Save size={18} />
+                {isSaving ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
-
-      {/* Toolbar */}
-      {!showPreview && <Toolbar />}
 
       {/* Export Modal */}
       <ExportModal

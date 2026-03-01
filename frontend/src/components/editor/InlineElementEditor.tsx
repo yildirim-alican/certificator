@@ -14,7 +14,14 @@ const InlineElementEditor: React.FC<InlineElementEditorProps> = ({ element }) =>
   const setSelectionColor = useEditorStore((state) => state.setSelectionColor);
 
   if (!element) {
-    return null;
+    return (
+      <div className="mt-4 border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
+        <h4 className="text-sm font-semibold text-gray-900 mb-1">Quick Edit</h4>
+        <p className="text-xs text-gray-600">
+          Select any element on canvas to edit content, alignment, size and style.
+        </p>
+      </div>
+    );
   }
 
   const isSystemBoundary = element.id.startsWith('system-boundary-');
@@ -31,19 +38,28 @@ const InlineElementEditor: React.FC<InlineElementEditorProps> = ({ element }) =>
     updateElement(element.id, { [key]: value });
   };
 
+  const alignElement = (mode: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+    if (mode === 'left') handleChange('x', 0);
+    if (mode === 'center') handleChange('x', Math.max(0, (100 - element.width) / 2));
+    if (mode === 'right') handleChange('x', Math.max(0, 100 - element.width));
+    if (mode === 'top') handleChange('y', 0);
+    if (mode === 'middle') handleChange('y', Math.max(0, (100 - element.height) / 2));
+    if (mode === 'bottom') handleChange('y', Math.max(0, 100 - element.height));
+  };
+
   const numberValue = (value: string, fallback = 0) => {
     const parsed = parseFloat(value);
     return Number.isNaN(parsed) ? fallback : parsed;
   };
 
   return (
-    <div className="mt-4 border border-gray-200 rounded-lg p-3 bg-white space-y-3">
+    <div className="mt-4 border border-gray-200 rounded-xl p-4 bg-white space-y-4 shadow-sm">
       <div>
         <h4 className="text-sm font-semibold text-gray-900">Quick Edit</h4>
         <p className="text-xs text-gray-500">{element.label} ({element.type})</p>
       </div>
 
-      <div>
+      <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
         <label className="text-xs text-gray-600 block mb-1">Selection Color</label>
         <input
           type="color"
@@ -53,8 +69,20 @@ const InlineElementEditor: React.FC<InlineElementEditorProps> = ({ element }) =>
         />
       </div>
 
+      <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Quick Align</p>
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => alignElement('left')} className="px-2 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Left</button>
+          <button onClick={() => alignElement('center')} className="px-2 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Center</button>
+          <button onClick={() => alignElement('right')} className="px-2 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Right</button>
+          <button onClick={() => alignElement('top')} className="px-2 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Top</button>
+          <button onClick={() => alignElement('middle')} className="px-2 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Middle</button>
+          <button onClick={() => alignElement('bottom')} className="px-2 py-1.5 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Bottom</button>
+        </div>
+      </div>
+
       {element.type === 'text' && (
-        <div>
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
           <label className="text-xs text-gray-600 block mb-1">Text</label>
           <textarea
             value={element.content || ''}

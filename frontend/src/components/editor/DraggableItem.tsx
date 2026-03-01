@@ -184,6 +184,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
       const handleWindowUp = () => {
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
+        document.body.style.overflow = '';
         setIsInteracting(false);
         setResizeHandle(null);
         onDragEnd?.();
@@ -191,6 +192,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
 
       document.body.style.userSelect = 'none';
       document.body.style.cursor = resizeHandle ? `${resizeHandle}-resize` : 'grabbing';
+      document.body.style.overflow = 'hidden';
 
       window.addEventListener('mousemove', handleWindowMove);
       window.addEventListener('mouseup', handleWindowUp);
@@ -198,6 +200,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
       return () => {
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
+        document.body.style.overflow = '';
         if (frameRef.current !== null) {
           cancelAnimationFrame(frameRef.current);
           frameRef.current = null;
@@ -369,10 +372,16 @@ const DraggableItem = React.memo<DraggableItemProps>(
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justifyContent:
+                      element.textAlign === 'left'
+                        ? 'flex-start'
+                        : element.textAlign === 'right'
+                          ? 'flex-end'
+                          : 'center',
                     padding: '8px',
                     boxSizing: 'border-box',
-                    wordWrap: 'break-word',
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
                     opacity: element.opacity ?? 1,
                     textShadow: shadowStyle,
                     pointerEvents: 'none',
@@ -386,12 +395,14 @@ const DraggableItem = React.memo<DraggableItemProps>(
               <img
                 src={element.src}
                 alt={element.label}
+                draggable={false}
                 style={{
                   width: '100%',
                   height: '100%',
                   objectFit: element.objectFit as any,
                   opacity: element.opacity ?? 1,
                   filter: element.shadowBlur ? `drop-shadow(${shadowStyle})` : undefined,
+                  pointerEvents: 'none',
                 }}
               />
             )}
@@ -414,6 +425,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
                   borderRadius: element.shapeType === 'circle' ? '50%' : '0',
                   opacity: element.opacity ?? 1,
                   boxShadow: shadowStyle,
+                  pointerEvents: 'none',
                 }}
               />
             )}
