@@ -35,6 +35,22 @@ Please prepare:
 
 Choose one setup option below.
 
+### One-Command Start (Easiest)
+
+From project root, run one of these:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
+```
+
+Or in Git Bash:
+
+```bash
+bash ./scripts/start-dev.sh
+```
+
+This starts backend and frontend automatically.
+
 ### Option A (Recommended): Docker Compose
 
 Use this if Docker Desktop is already installed.

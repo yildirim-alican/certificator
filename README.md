@@ -63,6 +63,20 @@ CertifyPro/
 
 ## Development Setup
 
+### One-Command Start (Windows / Git Bash)
+
+From project root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
+```
+
+Or from Git Bash:
+
+```bash
+bash ./scripts/start-dev.sh
+```
+
 ### Quick Start with Docker
 
 ```bash
