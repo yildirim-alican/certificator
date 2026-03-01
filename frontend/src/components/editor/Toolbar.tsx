@@ -95,6 +95,17 @@ const Toolbar: React.FC = () => {
           {isSystemBoundarySelected ? 'Boundary Locked' : 'Delete Element'}
         </button>
       )}
+
+      <div className="ml-auto hidden xl:flex items-center gap-2 text-xs text-gray-500">
+        <span className="px-2 py-1 bg-gray-100 rounded border">Del</span>
+        <span>Delete</span>
+        <span className="px-2 py-1 bg-gray-100 rounded border">Arrow</span>
+        <span>Nudge</span>
+        <span className="px-2 py-1 bg-gray-100 rounded border">Shift+Arrow</span>
+        <span>Fast Nudge</span>
+        <span className="px-2 py-1 bg-gray-100 rounded border">Ctrl/Cmd+D</span>
+        <span>Duplicate</span>
+      </div>
     </div>
   );
 };

@@ -42,6 +42,8 @@ const Canvas: React.FC<CanvasProps> = ({
   const selectedElementId = useEditorStore((state) => state.selectedElementId);
   const setSelectedElementId = useEditorStore((state) => state.setSelectedElementId);
   const updateElement = useEditorStore((state) => state.updateElement);
+  const deleteElement = useEditorStore((state) => state.deleteElement);
+  const addElement = useEditorStore((state) => state.addElement);
   const scale = useEditorStore((state) => state.scale);
   const showGuides = useEditorStore((state) => state.showGuides);
   const snapToGrid = useEditorStore((state) => state.snapToGrid);
@@ -91,6 +93,54 @@ const Canvas: React.FC<CanvasProps> = ({
       if (event.altKey) {
         setIsAltPressed(true);
       }
+
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        !!target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable);
+
+      if (isTypingTarget) {
+        return;
+      }
+
+      const selected = elements.find((entry) => entry.id === selectedElementId);
+      const isSystemBoundary = !!selected?.id.startsWith('system-boundary-');
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selected && !isSystemBoundary) {
+        event.preventDefault();
+        deleteElement(selected.id);
+        return;
+      }
+
+      if (event.key.startsWith('Arrow') && selected && !isSystemBoundary) {
+        event.preventDefault();
+        const step = event.shiftKey ? 1.5 : 0.5;
+        const xDelta = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+        const yDelta = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+
+        const nextX = Math.max(0, Math.min(100 - selected.width, selected.x + xDelta));
+        const nextY = Math.max(0, Math.min(100 - selected.height, selected.y + yDelta));
+
+        updateElement(selected.id, { x: nextX, y: nextY });
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && selected) {
+        event.preventDefault();
+        const duplicateId = `${selected.id}-copy-${Date.now()}`;
+        const offset = 1.5;
+        addElement({
+          ...selected,
+          id: duplicateId,
+          label: `${selected.label} Copy`,
+          x: Math.max(0, Math.min(100 - selected.width, selected.x + offset)),
+          y: Math.max(0, Math.min(100 - selected.height, selected.y + offset)),
+          zIndex: Math.max(...elements.map((entry) => entry.zIndex), 0) + 1,
+        });
+        setSelectedElementId(duplicateId);
+      }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
@@ -106,7 +156,7 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [elements, selectedElementId, deleteElement, updateElement, addElement, setSelectedElementId]);
 
   useEffect(() => {
     if (!isAltPressed) {
@@ -407,20 +457,39 @@ const Canvas: React.FC<CanvasProps> = ({
   }, [isAltPressed]);
 
   const handleElementResize = useCallback(
-    (elementId: string, newWidth: number, newHeight: number) => {
-      // Convert pixel dimensions to percentage
-      const percentWidth = (newWidth / canvasWidth) * 100;
-      const percentHeight = (newHeight / canvasHeight) * 100;
+    (
+      elementId: string,
+      resize: { width: number; height: number; x: number; y: number }
+    ) => {
+      const element = elements.find((entry) => entry.id === elementId);
+      if (!element) return;
 
-      const nextWidth = snapToGrid ? snapValue(percentWidth, 1) : percentWidth;
-      const nextHeight = snapToGrid ? snapValue(percentHeight, 1) : percentHeight;
+      let percentX = (resize.x / canvasWidth) * 100;
+      let percentY = (resize.y / canvasHeight) * 100;
+      let percentWidth = (resize.width / canvasWidth) * 100;
+      let percentHeight = (resize.height / canvasHeight) * 100;
+
+      if (snapToGrid) {
+        percentX = snapValue(percentX, 0.5);
+        percentY = snapValue(percentY, 0.5);
+        percentWidth = snapValue(percentWidth, 0.5);
+        percentHeight = snapValue(percentHeight, 0.5);
+      }
+
+      percentWidth = Math.max(2, Math.min(100, percentWidth));
+      percentHeight = Math.max(2, Math.min(100, percentHeight));
+
+      percentX = Math.max(0, Math.min(100 - percentWidth, percentX));
+      percentY = Math.max(0, Math.min(100 - percentHeight, percentY));
 
       updateElement(elementId, {
-        width: Math.max(5, Math.min(100, nextWidth)),
-        height: Math.max(5, Math.min(100, nextHeight)),
+        x: percentX,
+        y: percentY,
+        width: percentWidth,
+        height: percentHeight,
       });
     },
-    [canvasWidth, canvasHeight, updateElement, snapToGrid, snapValue]
+    [elements, canvasWidth, canvasHeight, updateElement, snapToGrid, snapValue]
   );
 
   const selectedCenterX = selectedElement ? selectedElement.x + selectedElement.width / 2 : null;
@@ -558,7 +627,7 @@ const Canvas: React.FC<CanvasProps> = ({
               isSelected={selectedElementId === element.id}
               onSelect={(e) => handleElementSelect(element.id, e)}
               onDrag={(dx, dy) => handleElementDrag(element.id, dx, dy)}
-              onResize={(w, h) => handleElementResize(element.id, w, h)}
+              onResize={(resize) => handleElementResize(element.id, resize)}
               onDragEnd={handleDragEnd}
               scale={renderedScale}
               canvasWidth={canvasWidth}
