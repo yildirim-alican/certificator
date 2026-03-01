@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
 import DraggableItem from './DraggableItem';
 
@@ -29,12 +29,34 @@ const Canvas: React.FC<CanvasProps> = ({
   const setSelectedElementId = useEditorStore((state) => state.setSelectedElementId);
   const updateElement = useEditorStore((state) => state.updateElement);
   const scale = useEditorStore((state) => state.scale);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(1);
 
   const A4_WIDTH_PX = 1240; // 210mm @ 150 DPI
   const A4_HEIGHT_PX = 1754; // 297mm @ 150 DPI
 
   const canvasWidth = orientation === 'landscape' ? A4_HEIGHT_PX : A4_WIDTH_PX;
   const canvasHeight = orientation === 'landscape' ? A4_WIDTH_PX : A4_HEIGHT_PX;
+  const renderedScale = Math.min(scale, fitScale);
+
+  useEffect(() => {
+    const recalculate = () => {
+      if (!viewportRef.current) return;
+
+      const bounds = viewportRef.current.getBoundingClientRect();
+      const availableWidth = Math.max(320, bounds.width - 32);
+      const availableHeight = Math.max(320, bounds.height - 32);
+
+      const widthScale = availableWidth / canvasWidth;
+      const heightScale = availableHeight / canvasHeight;
+      const nextFit = Math.min(widthScale, heightScale, 1);
+      setFitScale(nextFit);
+    };
+
+    recalculate();
+    window.addEventListener('resize', recalculate);
+    return () => window.removeEventListener('resize', recalculate);
+  }, [canvasWidth, canvasHeight]);
 
   const handleElementSelect = useCallback(
     (elementId: string, e: React.MouseEvent) => {
@@ -80,11 +102,11 @@ const Canvas: React.FC<CanvasProps> = ({
   );
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 p-4 overflow-auto">
+    <div ref={viewportRef} className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 p-4 overflow-hidden min-h-[55vh] lg:min-h-0">
       <div
         style={{
-          width: `${canvasWidth * scale}px`,
-          height: `${canvasHeight * scale}px`,
+          width: `${canvasWidth * renderedScale}px`,
+          height: `${canvasHeight * renderedScale}px`,
           backgroundColor,
           position: 'relative',
           boxShadow: '0 20px 50px rgba(0, 0, 0, 0.15)',
@@ -103,7 +125,7 @@ const Canvas: React.FC<CanvasProps> = ({
               linear-gradient(0deg, transparent 24%, rgba(200, 200, 200, 0.05) 25%, rgba(200, 200, 200, 0.05) 26%, transparent 27%, transparent 74%, rgba(200, 200, 200, 0.05) 75%, rgba(200, 200, 200, 0.05) 76%, transparent 77%, transparent),
               linear-gradient(90deg, transparent 24%, rgba(200, 200, 200, 0.05) 25%, rgba(200, 200, 200, 0.05) 26%, transparent 27%, transparent 74%, rgba(200, 200, 200, 0.05) 75%, rgba(200, 200, 200, 0.05) 76%, transparent 77%, transparent)
             `,
-            backgroundSize: `${50 * scale}px ${50 * scale}px`,
+            backgroundSize: `${50 * renderedScale}px ${50 * renderedScale}px`,
             pointerEvents: 'none',
             zIndex: 0,
           }}
@@ -119,7 +141,7 @@ const Canvas: React.FC<CanvasProps> = ({
               onSelect={(e) => handleElementSelect(element.id, e)}
               onDrag={(dx, dy) => handleElementDrag(element.id, dx, dy)}
               onResize={(w, h) => handleElementResize(element.id, w, h)}
-              scale={scale}
+              scale={renderedScale}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
             />

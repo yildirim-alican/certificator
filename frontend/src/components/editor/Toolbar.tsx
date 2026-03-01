@@ -17,6 +17,9 @@ const Toolbar: React.FC = () => {
   const setScale = useEditorStore((state) => state.setScale);
   const selectedElementId = useEditorStore((state) => state.selectedElementId);
   const deleteElement = useEditorStore((state) => state.deleteElement);
+  const elements = useEditorStore((state) => state.elements);
+  const selectedElement = elements.find((element) => element.id === selectedElementId);
+  const isSystemBoundarySelected = !!selectedElement?.id.startsWith('system-boundary-');
 
   const handleZoomIn = useCallback(() => {
     setScale(Math.min(2, scale * 1.1));
@@ -31,10 +34,10 @@ const Toolbar: React.FC = () => {
   }, [setScale]);
 
   const handleDelete = useCallback(() => {
-    if (selectedElementId) {
+    if (selectedElementId && !isSystemBoundarySelected) {
       deleteElement(selectedElementId);
     }
-  }, [selectedElementId, deleteElement]);
+  }, [selectedElementId, isSystemBoundarySelected, deleteElement]);
 
   return (
     <div className="flex items-center gap-3 p-4 bg-white border-b border-gray-200">
@@ -68,9 +71,10 @@ const Toolbar: React.FC = () => {
       {selectedElementId && (
         <button
           onClick={handleDelete}
+          disabled={isSystemBoundarySelected}
           className="px-3 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
         >
-          Delete Element
+          {isSystemBoundarySelected ? 'Boundary Locked' : 'Delete Element'}
         </button>
       )}
     </div>

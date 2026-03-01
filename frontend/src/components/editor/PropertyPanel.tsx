@@ -21,6 +21,7 @@ interface PropertyPanelProps {
  */
 const PropertyPanel: React.FC<PropertyPanelProps> = ({ element }) => {
   const updateElement = useEditorStore((state) => state.updateElement);
+  const isSystemBoundary = !!element?.id.startsWith('system-boundary-');
 
   const handleChange = useCallback(
     (key: string, value: unknown) => {
@@ -31,15 +32,22 @@ const PropertyPanel: React.FC<PropertyPanelProps> = ({ element }) => {
   );
 
   if (!element) {
+    return null;
+  }
+
+  if (isSystemBoundary) {
     return (
-      <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
-        <p className="text-gray-500 text-center mt-8">Select an element to edit</p>
+      <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 p-4 lg:p-6 overflow-y-auto max-h-[45vh] lg:max-h-screen">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">System Boundary</h3>
+        <p className="text-sm text-gray-600">
+          This outer certificate area is managed by the system and cannot be edited.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto">
+    <div className="w-full lg:w-80 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 p-4 lg:p-6 overflow-y-auto max-h-[45vh] lg:max-h-screen">
       {/* Header */}
       <h3 className="text-lg font-semibold text-gray-900 mb-4">{element.label}</h3>
       <div className="border-b border-gray-200 mb-4 pb-4">

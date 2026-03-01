@@ -33,8 +33,13 @@ const DraggableItem = React.memo<DraggableItemProps>(
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [resizeHandle, setResizeHandle] = useState<ResizeHandle>(null);
     const elementRef = useRef<HTMLDivElement>(null);
+    const isSystemBoundary = element.id.startsWith('system-boundary-');
 
     const handleMouseDown = (e: React.MouseEvent, handle?: ResizeHandle) => {
+      if (isSystemBoundary) {
+        return;
+      }
+
       if (handle) {
         e.preventDefault();
         setResizeHandle(handle);
@@ -88,7 +93,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
         transform: `rotate(${element.rotation}deg)`,
         zIndex: element.zIndex,
         opacity: element.visible ? 1 : 0.5,
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: isSystemBoundary ? 'default' : isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
       }),
       [
@@ -99,6 +104,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
         element.rotation,
         element.zIndex,
         element.visible,
+        isSystemBoundary,
         isDragging,
       ]
     );
@@ -209,7 +215,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
           </div>
 
           {/* Resize Handles (only show when selected) */}
-          {isSelected && (
+          {isSelected && !isSystemBoundary && (
             <>
               <ResizeHandle handle="nw" />
               <ResizeHandle handle="ne" />

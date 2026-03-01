@@ -152,9 +152,15 @@ If this is your first time, click **Create First Template** or **New Template**.
 ## 6) Design Your Certificate in the Editor
 
 On the editor screen, you can:
+- Select certificate type: **Digital**, **Minimal**, or **Modern**
+- Select A4 mode: **Portrait** or **Landscape**
 - Select a ready-made layout from **System Layouts** (left panel)
 - Select an element and edit its properties on the right panel
 - Move/resize items on the canvas
+
+Important:
+- Every certificate includes a system-defined outer boundary area to keep the page clearly visible.
+- This boundary is locked by the system and cannot be deleted.
 
 Top buttons:
 - **Preview**: switch between editing and preview
