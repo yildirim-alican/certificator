@@ -86,15 +86,21 @@ const Toolbar: React.FC = () => {
         Snap
       </button>
 
-      {selectedElementId && (
-        <button
-          onClick={handleDelete}
-          disabled={isSystemBoundarySelected}
-          className="px-3 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
-        >
-          {isSystemBoundarySelected ? 'Boundary Locked' : 'Delete Element'}
-        </button>
-      )}
+      <div className="min-w-[140px]">
+        {selectedElementId ? (
+          <button
+            onClick={handleDelete}
+            disabled={isSystemBoundarySelected}
+            className="w-full px-3 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition disabled:bg-gray-400"
+          >
+            {isSystemBoundarySelected ? 'Boundary Locked' : 'Delete Element'}
+          </button>
+        ) : (
+          <div className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-400 bg-gray-50 text-center">
+            No Selection
+          </div>
+        )}
+      </div>
 
       <div className="ml-auto hidden xl:flex items-center gap-2 text-xs text-gray-500">
         <span className="px-2 py-1 bg-gray-100 rounded border">Del</span>

@@ -44,12 +44,15 @@ export interface CertificateTemplate {
   id: string;
   name: string;
   description?: string;
+  category?: 'achievement' | 'participation' | 'completion' | 'award' | 'diploma' | 'training';
+  isPremium?: boolean;
   orientation: 'portrait' | 'landscape';
   width: number; // mm
   height: number; // mm
   backgroundColor?: string;
   elements: CertificateElement[];
   variables: string[]; // e.g., ['{{Name}}', '{{Title}}', '{{Date}}']
+  objectFit?: 'cover' | 'contain' | 'fill' | 'scale-down';
   createdAt: Date;
   updatedAt: Date;
   thumbnail?: string;

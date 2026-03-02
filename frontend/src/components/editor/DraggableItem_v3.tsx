@@ -9,33 +9,27 @@ interface DraggableItemProps {
   element: CertificateElement;
   isSelected: boolean;
   onSelect: (e: React.MouseEvent) => void;
-  onDrag?: (deltaX: number, deltaY: number) => void;
-  onResize?: (resize: { width: number; height: number; x: number; y: number }) => void;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
   scale: number;
   canvasWidth: number;
   canvasHeight: number;
+  canvasRect: DOMRect | null;
 }
 
 type ResizeHandle = 'nw' | 'ne' | 'se' | 'sw' | 'n' | 'e' | 's' | 'w' | null;
 
 /**
- * DraggableItem - Smooth element interaction
- * Refactored for fluent drag, resize, and selection
+ * DraggableItem v3 - Production-ready drag/resize with real-time sync
+ * Based on Flutter Figma Clone pattern + Supabase Realtime
  */
 const DraggableItem = React.memo<DraggableItemProps>(
   ({
     element,
     isSelected,
     onSelect,
-    onDrag,
-    onResize,
-    onDragStart,
-    onDragEnd,
     scale,
     canvasWidth,
     canvasHeight,
+    canvasRect,
   }) => {
     const selectionColor = useEditorStore((state) => state.selectionColor);
     const updateElement = useEditorStore((state) => state.updateElement);
@@ -49,25 +43,23 @@ const DraggableItem = React.memo<DraggableItemProps>(
     // Refs for precise drag/resize tracking
     const elementRef = useRef<HTMLDivElement>(null);
     const velocityTrackerRef = useRef(new VelocityTracker(8));
-    const dragStateRef = useRef({
-      startX: 0,
-      startY: 0,
-      currentX: 0,
-      currentY: 0,
-      prevX: 0,
-      prevY: 0,
-      moved: false,
-      lastUpdateTime: 0,
-    });
 
-    const resizeStateRef = useRef({
-      startX: 0,
-      startY: 0,
-      startWidth: 0,
-      startHeight: 0,
+    // Pan state (like Flutter example)
+    const panStateRef = useRef({
+      isActive: false,
+      startClientX: 0,
+      startClientY: 0,
+      currentClientX: 0,
+      currentClientY: 0,
+      lastClientX: 0,
+      lastClientY: 0,
       startElementX: 0,
       startElementY: 0,
-      ratio: 1,
+      startElementWidth: 0,
+      startElementHeight: 0,
+      lastUpdateTime: 0,
+      threshold: AdvancedPointerSensitivity.DRAG_THRESHOLD,
+      moved: false,
     });
 
     const frameRef = useRef<number | null>(null);
@@ -81,7 +73,52 @@ const DraggableItem = React.memo<DraggableItemProps>(
     }, [element.content, isTextEditing]);
 
     /**
-     * Start drag operation (mousedown on element body)
+     * Convert canvas pixel coordinates to percentage
+     */
+    const pixelsToPercent = useCallback(
+      (px: number, dimension: 'x' | 'y') => {
+        return dimension === 'x'
+          ? (px / canvasWidth) * 100
+          : (px / canvasHeight) * 100;
+      },
+      [canvasWidth, canvasHeight]
+    );
+
+    /**
+     * Convert percentage coordinates to canvas pixels
+     */
+    const percentToPixels = useCallback(
+      (pct: number, dimension: 'x' | 'y') => {
+        return dimension === 'x'
+          ? (pct / 100) * canvasWidth
+          : (pct / 100) * canvasHeight;
+      },
+      [canvasWidth, canvasHeight]
+    );
+
+    /**
+     * Get cursor position relative to canvas
+     * Handles scale and canvas offset
+     */
+    const getCanvasRelativePosition = useCallback(
+      (clientX: number, clientY: number) => {
+        if (!canvasRect) {
+          return { x: clientX, y: clientY };
+        }
+
+        const relX = (clientX - canvasRect.left) / scale;
+        const relY = (clientY - canvasRect.top) / scale;
+
+        return {
+          x: Math.max(0, Math.min(relX, canvasWidth)),
+          y: Math.max(0, Math.min(relY, canvasHeight)),
+        };
+      },
+      [canvasRect, scale, canvasWidth, canvasHeight]
+    );
+
+    /**
+     * START DRAG - Pan down pattern (like Flutter)
      */
     const handleDragStart = useCallback(
       (e: React.MouseEvent) => {
@@ -89,34 +126,35 @@ const DraggableItem = React.memo<DraggableItemProps>(
 
         e.preventDefault();
         e.stopPropagation();
-
-        // Select element
         onSelect(e);
 
-        // Initialize drag state
-        dragStateRef.current = {
-          startX: e.clientX,
-          startY: e.clientY,
-          currentX: e.clientX,
-          currentY: e.clientY,
-          prevX: e.clientX,
-          prevY: e.clientY,
-          moved: false,
+
+        panStateRef.current = {
+          isActive: true,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          currentClientX: e.clientX,
+          currentClientY: e.clientY,
+          lastClientX: e.clientX,
+          lastClientY: e.clientY,
+          startElementX: percentToPixels(element.x, 'x'),
+          startElementY: percentToPixels(element.y, 'y'),
+          startElementWidth: percentToPixels(element.width, 'x'),
+          startElementHeight: percentToPixels(element.height, 'y'),
           lastUpdateTime: performance.now(),
+          threshold: AdvancedPointerSensitivity.DRAG_THRESHOLD,
+          moved: false,
         };
 
         setIsDragging(true);
-        onDragStart?.();
-
-        // Lock body
         document.body.style.userSelect = 'none';
         document.body.style.cursor = 'grabbing';
       },
-      [isSystemBoundary, isTextEditing, onSelect, onDragStart]
+      [isSystemBoundary, isTextEditing, onSelect, element, percentToPixels, getCanvasRelativePosition]
     );
 
     /**
-     * Start resize operation (mousedown on handle)
+     * START RESIZE - Pan down on handle (like Flutter)
      */
     const handleResizeStart = useCallback(
       (handle: ResizeHandle) => (e: React.MouseEvent) => {
@@ -124,232 +162,245 @@ const DraggableItem = React.memo<DraggableItemProps>(
 
         e.preventDefault();
         e.stopPropagation();
-
-        // Select element
         onSelect(e);
 
-        // Initialize resize state
-        const elementWidthPx = (element.width / 100) * canvasWidth;
-        const elementHeightPx = (element.height / 100) * canvasHeight;
-        const elementXPx = (element.x / 100) * canvasWidth;
-        const elementYPx = (element.y / 100) * canvasHeight;
+        const startWidthPx = percentToPixels(element.width, 'x');
+        const startHeightPx = percentToPixels(element.height, 'y');
 
-        resizeStateRef.current = {
-          startX: e.clientX,
-          startY: e.clientY,
-          startWidth: elementWidthPx,
-          startHeight: elementHeightPx,
-          startElementX: elementXPx,
-          startElementY: elementYPx,
-          ratio: elementHeightPx > 0 ? elementWidthPx / elementHeightPx : 1,
+        panStateRef.current = {
+          isActive: true,
+          startClientX: e.clientX,
+          startClientY: e.clientY,
+          currentClientX: e.clientX,
+          currentClientY: e.clientY,
+          lastClientX: e.clientX,
+          lastClientY: e.clientY,
+          startElementX: percentToPixels(element.x, 'x'),
+          startElementY: percentToPixels(element.y, 'y'),
+          startElementWidth: startWidthPx,
+          startElementHeight: startHeightPx,
+          lastUpdateTime: performance.now(),
+          threshold: 0, // No threshold for resize
+          moved: false,
         };
 
         setResizeHandle(handle);
         setIsDragging(true);
-        onDragStart?.();
-
-        // Lock body and set cursor
         document.body.style.userSelect = 'none';
         document.body.style.cursor = `${handle}-resize`;
       },
-      [isSystemBoundary, element, canvasWidth, canvasHeight, onSelect, onDragStart]
+      [isSystemBoundary, element, percentToPixels, onSelect]
     );
 
     /**
-     * Global mousemove handler for drag/resize
+     * Helper to clean up drag state
+     */
+    const cleanupDragState = useCallback(() => {
+      setIsDragging(false);
+      setResizeHandle(null);
+      panStateRef.current.isActive = false;
+      panStateRef.current.moved = false;
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+      velocityTrackerRef.current.reset();
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    }, []);
+
+    /**
+     * PAN UPDATE - Mouse move handler
+     * Continuously syncs to store (like Flutter broadcast)
      */
     useEffect(() => {
-      if (!isDragging) return;
+      if (!isDragging || !panStateRef.current.isActive) return;
 
       const handleMouseMove = (event: MouseEvent) => {
         event.preventDefault();
 
-        const deltaX = event.clientX - dragStateRef.current.startX;
-        const deltaY = event.clientY - dragStateRef.current.startY;
+        panStateRef.current.currentClientX = event.clientX;
+        panStateRef.current.currentClientY = event.clientY;
 
-        // Drag threshold using advanced pointer sensitivity
-        if (!dragStateRef.current.moved && Math.hypot(deltaX, deltaY) < AdvancedPointerSensitivity.DRAG_THRESHOLD) {
-          return;
-        }
-
-        dragStateRef.current.moved = true;
-        dragStateRef.current.currentX = event.clientX;
-        dragStateRef.current.currentY = event.clientY;
-
-        // RAF-throttled update
+        // RAF-batched update
         if (frameRef.current !== null) {
           cancelAnimationFrame(frameRef.current);
         }
 
         frameRef.current = requestAnimationFrame(() => {
-          let dx = dragStateRef.current.currentX - dragStateRef.current.startX;
-          let dy = dragStateRef.current.currentY - dragStateRef.current.startY;
-
-          // Calculate velocity for smooth momentum
           const now = performance.now();
-          const deltaTime = now - dragStateRef.current.lastUpdateTime;
-          dragStateRef.current.lastUpdateTime = now;
+          const deltaTime = Math.max(1, now - panStateRef.current.lastUpdateTime);
+          panStateRef.current.lastUpdateTime = now;
 
-          if (deltaTime > 0) {
-            const { vx, vy } = AdvancedPointerSensitivity.calculateVelocity(
-              dragStateRef.current.prevX,
-              dragStateRef.current.prevY,
-              dragStateRef.current.currentX,
-              dragStateRef.current.currentY,
-              deltaTime
-            );
+          const deltaX = panStateRef.current.currentClientX - panStateRef.current.startClientX;
+          const deltaY = panStateRef.current.currentClientY - panStateRef.current.startClientY;
 
-            // Track velocity for momentum
-            velocityTrackerRef.current.addSample(vx, vy);
-
-            dragStateRef.current.prevX = dragStateRef.current.currentX;
-            dragStateRef.current.prevY = dragStateRef.current.currentY;
+          // Check threshold
+          const distance = Math.hypot(deltaX, deltaY);
+          if (!panStateRef.current.moved && distance < panStateRef.current.threshold) {
+            return;
           }
 
-          // Apply advanced easing for smoother feel
-          dx = AdvancedPointerSensitivity.applyEasing(dx, 'easeOut');
-          dy = AdvancedPointerSensitivity.applyEasing(dy, 'easeOut');
+          panStateRef.current.moved = true;
+
+          // Calculate velocity for momentum
+          const { vx, vy } = AdvancedPointerSensitivity.calculateVelocity(
+            panStateRef.current.lastClientX,
+            panStateRef.current.lastClientY,
+            panStateRef.current.currentClientX,
+            panStateRef.current.currentClientY,
+            deltaTime
+          );
+
+          velocityTrackerRef.current.addSample(vx, vy);
+
+          panStateRef.current.lastClientX = panStateRef.current.currentClientX;
+          panStateRef.current.lastClientY = panStateRef.current.currentClientY;
+
+          // Apply scale factor for actual pixel movement
+          const scaledDeltaX = deltaX / scale;
+          const scaledDeltaY = deltaY / scale;
 
           if (resizeHandle) {
-            // Handle resize
-            let newWidth = resizeStateRef.current.startWidth + (resizeHandle.includes('e') ? dx : 0) - (resizeHandle.includes('w') ? dx : 0);
-            let newHeight = resizeStateRef.current.startHeight + (resizeHandle.includes('s') ? dy : 0) - (resizeHandle.includes('n') ? dy : 0);
+            // ===== RESIZE LOGIC =====
+            let newWidth = panStateRef.current.startElementWidth;
+            let newHeight = panStateRef.current.startElementHeight;
+            let newX = panStateRef.current.startElementX;
+            let newY = panStateRef.current.startElementY;
 
-            let newX = resizeStateRef.current.startElementX;
-            let newY = resizeStateRef.current.startElementY;
-
+            // Calculate new dimensions based on handle
+            if (resizeHandle.includes('e')) {
+              newWidth = Math.max(20, panStateRef.current.startElementWidth + scaledDeltaX);
+            }
             if (resizeHandle.includes('w')) {
-              newX += dx;
+              newWidth = Math.max(20, panStateRef.current.startElementWidth - scaledDeltaX);
+              newX = panStateRef.current.startElementX + (panStateRef.current.startElementWidth - newWidth);
+            }
+            if (resizeHandle.includes('s')) {
+              newHeight = Math.max(20, panStateRef.current.startElementHeight + scaledDeltaY);
             }
             if (resizeHandle.includes('n')) {
-              newY += dy;
+              newHeight = Math.max(20, panStateRef.current.startElementHeight - scaledDeltaY);
+              newY = panStateRef.current.startElementY + (panStateRef.current.startElementHeight - newHeight);
             }
 
-            // Minimum size
-            const MIN_SIZE = 20;
-            newWidth = Math.max(MIN_SIZE, newWidth);
-            newHeight = Math.max(MIN_SIZE, newHeight);
-
-            // Proportional resize with Shift key
+            // Proportional resize (Shift key)
             if (event.shiftKey) {
-              const ratio = resizeStateRef.current.ratio;
-              const isHorizontal = resizeHandle === 'e' || resizeHandle === 'w';
-              const isVertical = resizeHandle === 'n' || resizeHandle === 's';
+              const ratio = panStateRef.current.startElementHeight > 0
+                ? panStateRef.current.startElementWidth / panStateRef.current.startElementHeight
+                : 1;
 
-              if (isHorizontal) {
-                newHeight = Math.max(MIN_SIZE, newWidth / ratio);
-              } else if (isVertical) {
-                newWidth = Math.max(MIN_SIZE, newHeight * ratio);
-              } else {
-                const usedX = Math.abs(dx) > Math.abs(dy);
-                if (usedX) {
-                  newHeight = Math.max(MIN_SIZE, newWidth / ratio);
+              const isCorner = (resizeHandle.length === 2);
+              if (isCorner) {
+                const isHorizontalLed = Math.abs(scaledDeltaX) > Math.abs(scaledDeltaY);
+                if (isHorizontalLed) {
+                  newHeight = newWidth / ratio;
                   if (resizeHandle.includes('n')) {
-                    newY = resizeStateRef.current.startElementY + (resizeStateRef.current.startHeight - newHeight);
+                    newY = panStateRef.current.startElementY + (panStateRef.current.startElementHeight - newHeight);
                   }
                 } else {
-                  newWidth = Math.max(MIN_SIZE, newHeight * ratio);
+                  newWidth = newHeight * ratio;
                   if (resizeHandle.includes('w')) {
-                    newX = resizeStateRef.current.startElementX + (resizeStateRef.current.startWidth - newWidth);
+                    newX = panStateRef.current.startElementX + (panStateRef.current.startElementWidth - newWidth);
                   }
                 }
               }
             }
 
-            // Ensure within bounds
+            // Bounds check
             newX = Math.max(0, newX);
             newY = Math.max(0, newY);
             if (newX + newWidth > canvasWidth) newX = canvasWidth - newWidth;
             if (newY + newHeight > canvasHeight) newY = canvasHeight - newHeight;
 
-            // Convert to percentage
-            const percentX = (newX / canvasWidth) * 100;
-            const percentY = (newY / canvasHeight) * 100;
-            const percentWidth = (newWidth / canvasWidth) * 100;
-            const percentHeight = (newHeight / canvasHeight) * 100;
-
-            onResize?.({
-              x: Math.max(0, Math.min(100 - percentWidth, percentX)),
-              y: Math.max(0, Math.min(100 - percentHeight, percentY)),
-              width: percentWidth,
-              height: percentHeight,
+            // Convert to percentage and update
+            updateElement(element.id, {
+              x: pixelsToPercent(newX, 'x'),
+              y: pixelsToPercent(newY, 'y'),
+              width: pixelsToPercent(newWidth, 'x'),
+              height: pixelsToPercent(newHeight, 'y'),
             });
           } else {
-            // Handle drag
-            const percentDeltaX = (dx / canvasWidth) * 100;
-            const percentDeltaY = (dy / canvasHeight) * 100;
+            // ===== DRAG LOGIC =====
+            // Element follows cursor directly with no offset
+            // Position = startElementPos + totalDragDelta
+            const newX = panStateRef.current.startElementX + scaledDeltaX;
+            const newY = panStateRef.current.startElementY + scaledDeltaY;
 
-            onDrag?.(percentDeltaX, percentDeltaY);
+            // Bounds check
+            const elementWidthPx = percentToPixels(element.width, 'x');
+            const elementHeightPx = percentToPixels(element.height, 'y');
+
+            const constrainedX = Math.max(0, Math.min(newX, canvasWidth - elementWidthPx));
+            const constrainedY = Math.max(0, Math.min(newY, canvasHeight - elementHeightPx));
+
+            // Update store with absolute position
+            updateElement(element.id, {
+              x: pixelsToPercent(constrainedX, 'x'),
+              y: pixelsToPercent(constrainedY, 'y'),
+            });
           }
 
           frameRef.current = null;
         });
       };
 
-      const handleMouseUp = () => {
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
+      const handleMouseUp = (event: MouseEvent) => {
+        // Reject non-left-click mouse up (right click, middle click, etc)
+        if (event.button !== 0) return;
 
-        if (frameRef.current !== null) {
-          cancelAnimationFrame(frameRef.current);
-          frameRef.current = null;
-        }
+        const cleanup = () => {
+          cleanupDragState();
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('mouseup', handleMouseUp);
+        };
 
-        // Apply momentum/inertia if dragging (not resizing)
-        if (!resizeHandle && dragStateRef.current.moved) {
+        // Apply momentum if dragging (not resizing)
+        if (!resizeHandle && panStateRef.current.moved) {
           const { vx, vy } = velocityTrackerRef.current.getSmoothedVelocity();
 
-          // Only apply momentum if velocity is significant
           if (
             !AdvancedPointerSensitivity.isVelocityNegligible(vx) ||
             !AdvancedPointerSensitivity.isVelocityNegligible(vy)
           ) {
-            // Generate momentum frames and apply them
             const momentumFrames = AdvancedPointerSensitivity.generateMomentumFrames(vx, vy, 30);
 
             let frameIndex = 0;
             const applyMomentumFrame = () => {
-              if (frameIndex < momentumFrames.length && dragStateRef.current.moved) {
+              if (frameIndex < momentumFrames.length && panStateRef.current.moved) {
                 const { dx, dy } = momentumFrames[frameIndex];
-                const percentDeltaX = (dx / canvasWidth) * 100;
-                const percentDeltaY = (dy / canvasHeight) * 100;
 
-                onDrag?.(percentDeltaX, percentDeltaY);
+                // Apply momentum as absolute delta
+                const momentumX = panStateRef.current.startElementX + (frameIndex === 0 ? 0 : dx / scale);
+                const momentumY = panStateRef.current.startElementY + (frameIndex === 0 ? 0 : dy / scale);
+
+                const elementWidthPx = percentToPixels(element.width, 'x');
+                const elementHeightPx = percentToPixels(element.height, 'y');
+
+                const constrainedX = Math.max(0, Math.min(momentumX, canvasWidth - elementWidthPx));
+                const constrainedY = Math.max(0, Math.min(momentumY, canvasHeight - elementHeightPx));
+
+                updateElement(element.id, {
+                  x: pixelsToPercent(constrainedX, 'x'),
+                  y: pixelsToPercent(constrainedY, 'y'),
+                });
+
                 frameIndex++;
                 frameRef.current = requestAnimationFrame(applyMomentumFrame);
               } else {
                 frameRef.current = null;
-                setIsDragging(false);
-                setResizeHandle(null);
-                dragStateRef.current.moved = false;
-                velocityTrackerRef.current.reset();
-                onDragEnd?.();
-
-                window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', handleMouseUp);
+                cleanup();
               }
             };
 
             frameRef.current = requestAnimationFrame(applyMomentumFrame);
           } else {
-            setIsDragging(false);
-            setResizeHandle(null);
-            dragStateRef.current.moved = false;
-            velocityTrackerRef.current.reset();
-            onDragEnd?.();
-
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            // No momentum
+            cleanup();
           }
         } else {
-          setIsDragging(false);
-          setResizeHandle(null);
-          dragStateRef.current.moved = false;
-          velocityTrackerRef.current.reset();
-          onDragEnd?.();
-
-          window.removeEventListener('mousemove', handleMouseMove);
-          window.removeEventListener('mouseup', handleMouseUp);
+          // Resize or no movement
+          cleanup();
         }
       };
 
@@ -359,8 +410,22 @@ const DraggableItem = React.memo<DraggableItemProps>(
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current);
+        }
       };
-    }, [isDragging, resizeHandle, scale, canvasWidth, canvasHeight, onDrag, onResize, onDragEnd]);
+    }, [
+      isDragging,
+      resizeHandle,
+      scale,
+      canvasWidth,
+      canvasHeight,
+      element,
+      updateElement,
+      pixelsToPercent,
+      percentToPixels,
+      cleanupDragState,
+    ]);
 
     /**
      * Double-click to edit text

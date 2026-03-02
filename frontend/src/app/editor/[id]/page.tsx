@@ -9,10 +9,12 @@ import Toolbar from '@/components/editor/Toolbar';
 import SystemLayoutPicker from '@/components/editor/SystemLayoutPicker';
 import InlineElementEditor from '@/components/editor/InlineElementEditor';
 import ExportModal from '@/components/editor/ExportModal';
+import TemplateSelector from '@/components/editor/TemplateSelector';
+import QuickEdit from '@/components/editor/QuickEdit';
 import Button from '@/components/shared/Button';
 import Input from '@/components/shared/Input';
 import { Save, Download, Eye, FileText, Home, Sparkles } from 'lucide-react';
-import { CertificateElement } from '@/types/CertificateTemplate';
+import { CertificateElement, CertificateTemplate } from '@/types/CertificateTemplate';
 import {
   LayoutOrientation,
   SystemLayoutPreset,
@@ -52,16 +54,15 @@ export default function EditorPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showQuickEdit, setShowQuickEdit] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const [activeOrientation, setActiveOrientation] = useState<LayoutOrientation>('landscape');
   const [issuerLogoSrc, setIssuerLogoSrc] = useState<string>('');
-  const [sponsorLogoSrc, setSponsorLogoSrc] = useState<string>('');
+  const [sponsorLogos, setSponsorLogos] = useState<string[]>([]);
 
   const ALLOWED_VARIABLES = ['[recipient.name]', '[recipient.surname]', '[certificate.success_rate]'];
 
   const selectedElement = elements.find((el) => el.id === selectedElementId) || null;
-
-  // TODO: Load template from API
   useEffect(() => {
     if (!template) {
       // Initialize with empty template
@@ -119,7 +120,7 @@ export default function EditorPage() {
 
   const handleBulkGenerate = () => {
     if (!template) return;
-    router.push('/bulk-generate');
+    setShowQuickEdit(true);
   };
 
   const handleApplyPreset = (preset: SystemLayoutPreset) => {
@@ -188,11 +189,34 @@ export default function EditorPage() {
       });
     }
 
-    if (!withCoreZones.some((element) => element.label.toLowerCase().includes('sponsor logo'))) {
+    // Add sponsor logos (multiple)
+    sponsorLogos.forEach((logoSrc, logoIndex) => {
+      if (!withCoreZones.some((element) => element.id === `${preset.id}-sponsor-logo-${logoIndex}`)) {
+        const spacing = defaultLogoWidth + 2; // 2 units spacing between logos
+        withCoreZones.push({
+          id: `${preset.id}-sponsor-logo-${logoIndex}`,
+          type: 'image',
+          label: `Sponsor Logo ${logoIndex + 1}`,
+          x: sponsorLogoX - (sponsorLogos.length - 1) * spacing / 2 + logoIndex * spacing,
+          y: logoY,
+          width: defaultLogoWidth,
+          height: defaultLogoHeight,
+          rotation: 0,
+          zIndex: 11 + logoIndex,
+          visible: true,
+          src: logoSrc,
+          objectFit: 'contain',
+          opacity: 1,
+        });
+      }
+    });
+
+    // If no sponsor logos are added yet, add placeholder
+    if (sponsorLogos.length === 0 && !withCoreZones.some((element) => element.label.toLowerCase().includes('sponsor logo'))) {
       withCoreZones.push({
-        id: `${preset.id}-sponsor-logo`,
+        id: `${preset.id}-sponsor-logo-0`,
         type: 'image',
-        label: 'Sponsor Logo',
+        label: 'Sponsor Logo 1',
         x: sponsorLogoX,
         y: logoY,
         width: defaultLogoWidth,
@@ -200,7 +224,7 @@ export default function EditorPage() {
         rotation: 0,
         zIndex: 11,
         visible: true,
-        src: sponsorLogoSrc,
+        src: '',
         objectFit: 'contain',
         opacity: 1,
       });
@@ -239,11 +263,14 @@ export default function EditorPage() {
         : `${preset.id}-${index}-${now}`;
 
       if (element.type === 'image') {
-        const nextSrc = element.label.toLowerCase().includes('issuer logo')
-          ? issuerLogoSrc || element.src
-          : element.label.toLowerCase().includes('sponsor logo')
-            ? sponsorLogoSrc || element.src
-            : element.src;
+        let nextSrc = element.src;
+        if (element.label.toLowerCase().includes('issuer logo')) {
+          nextSrc = issuerLogoSrc || element.src;
+        } else if (element.label.toLowerCase().includes('sponsor logo')) {
+          const sponsorMatch = element.label.match(/sponsor logo (\d+)/i);
+          const logoIndex = sponsorMatch ? parseInt(sponsorMatch[1]) - 1 : 0;
+          nextSrc = sponsorLogos[logoIndex] || element.src;
+        }
 
         return {
           ...element,
@@ -313,11 +340,14 @@ export default function EditorPage() {
     });
   };
 
-  const handleSponsorLogoUpload = (file: File) => {
+  const handleSponsorLogoUpload = (file: File, logoIndex: number = 0) => {
     readFileAsDataUrl(file, (dataUrl) => {
-      setSponsorLogoSrc(dataUrl);
+      const newLogos = [...sponsorLogos];
+      newLogos[logoIndex] = dataUrl;
+      setSponsorLogos(newLogos);
+      
       elements
-        .filter((element) => element.type === 'image' && element.label.toLowerCase().includes('sponsor logo'))
+        .filter((element) => element.label.match(new RegExp(`sponsor logo ${logoIndex + 1}`, 'i')))
         .forEach((element) => {
           useEditorStore.getState().updateElement(element.id, { src: dataUrl });
         });
@@ -396,10 +426,39 @@ export default function EditorPage() {
         </div>
       </header>
 
+      {/* Template Selector Ribbon */}
+      {!showPreview && (
+        <TemplateSelector
+          templates={templates}
+          activeTemplateId={template?.id || null}
+          onSelectTemplate={(selectedTemplate) => {
+            setTemplate(selectedTemplate);
+            reorderElements(selectedTemplate.elements);
+          }}
+          onCreateNew={() => {
+            const newTemplate: CertificateTemplate = {
+              id: `template-${Date.now()}`,
+              name: 'New Template',
+              description: '',
+              orientation: 'landscape',
+              width: 297,
+              height: 210,
+              backgroundColor: '#ffffff',
+              elements: [],
+              variables: ['[recipient.name]', '[recipient.surname]'],
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            setTemplate(newTemplate);
+            addTemplate(newTemplate);
+          }}
+        />
+      )}
+
       {/* Main Editor */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {!showPreview && (
-          <div className="w-full lg:w-[360px] bg-white border-b lg:border-b-0 lg:border-r border-gray-200 p-4 lg:p-5 overflow-y-auto max-h-screen">
+          <div className="w-full lg:w-[360px] lg:flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 p-4 lg:p-5 overflow-y-scroll [scrollbar-gutter:stable] max-h-screen">
             <SystemLayoutPicker
               presets={systemLayoutPresets}
               activePresetId={activePresetId}
@@ -451,6 +510,18 @@ export default function EditorPage() {
         data={{}}
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
+      />
+
+      {/* Quick Edit Modal */}
+      <QuickEdit
+        template={template}
+        isOpen={showQuickEdit}
+        onClose={() => setShowQuickEdit(false)}
+        onGenerate={(data) => {
+          console.log('Quick edit data:', data);
+          // Implementation: generate PDF with quick edit data
+          setShowQuickEdit(false);
+        }}
       />
     </div>
   );

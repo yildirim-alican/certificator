@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
-import DraggableItem from './DraggableItem';
-import { CertificateElement } from '@/types/CertificateTemplate';
+import DraggableItem from './DraggableItem_v3';
 
 interface CanvasProps {
   orientation?: 'portrait' | 'landscape';
@@ -46,12 +45,14 @@ const Canvas: React.FC<CanvasProps> = ({
   const addElement = useEditorStore((state) => state.addElement);
   const scale = useEditorStore((state) => state.scale);
   const showGuides = useEditorStore((state) => state.showGuides);
-  const snapToGrid = useEditorStore((state) => state.snapToGrid);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasRect, setCanvasRect] = useState<DOMRect | null>(null);
   const [fitScale, setFitScale] = useState(1);
   const [activeGuides, setActiveGuides] = useState<GuideLine[]>([]);
   const [distanceGuides, setDistanceGuides] = useState<DistanceGuide[]>([]);
   const [isAltPressed, setIsAltPressed] = useState(false);
+  const [isCanvasActive, setIsCanvasActive] = useState(false);
 
   const A4_WIDTH_PX = 1240; // 210mm @ 150 DPI
   const A4_HEIGHT_PX = 1754; // 297mm @ 150 DPI
@@ -60,13 +61,9 @@ const Canvas: React.FC<CanvasProps> = ({
   const canvasHeight = orientation === 'landscape' ? A4_WIDTH_PX : A4_HEIGHT_PX;
   const renderedScale = Math.min(scale, fitScale);
   const selectedElement = elements.find((element) => element.id === selectedElementId) || null;
-
-  const snapValue = useCallback(
-    (value: number, step = 1): number => {
-      if (!snapToGrid) return value;
-      return Math.round(value / step) * step;
-    },
-    [snapToGrid]
+  const sortedElements = useMemo(
+    () => [...elements].sort((left, right) => left.zIndex - right.zIndex),
+    [elements]
   );
 
   useEffect(() => {
@@ -88,10 +85,32 @@ const Canvas: React.FC<CanvasProps> = ({
     return () => window.removeEventListener('resize', recalculate);
   }, [canvasWidth, canvasHeight]);
 
+  // Update canvas bounds for accurate position calculation
+  useEffect(() => {
+    const updateCanvasRect = () => {
+      if (canvasRef.current) {
+        setCanvasRect(canvasRef.current.getBoundingClientRect());
+      }
+    };
+
+    updateCanvasRect();
+    window.addEventListener('resize', updateCanvasRect);
+    const intervalId = setInterval(updateCanvasRect, 100); // Update periodically
+
+    return () => {
+      window.removeEventListener('resize', updateCanvasRect);
+      clearInterval(intervalId);
+    };
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.altKey) {
         setIsAltPressed(true);
+      }
+
+      if (!isCanvasActive) {
+        return;
       }
 
       const target = event.target as HTMLElement | null;
@@ -127,7 +146,7 @@ const Canvas: React.FC<CanvasProps> = ({
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && selected) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd' && selected && !isSystemBoundary) {
         event.preventDefault();
         const duplicateId = `${selected.id}-copy-${Date.now()}`;
         const offset = 1.5;
@@ -156,161 +175,31 @@ const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [elements, selectedElementId, deleteElement, updateElement, addElement, setSelectedElementId]);
+  }, [
+    elements,
+    selectedElementId,
+    deleteElement,
+    updateElement,
+    addElement,
+    setSelectedElementId,
+    isCanvasActive,
+  ]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!viewportRef.current) return;
+      setIsCanvasActive(viewportRef.current.contains(event.target as Node));
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, []);
 
   useEffect(() => {
     if (!isAltPressed) {
       setDistanceGuides([]);
     }
   }, [isAltPressed]);
-
-  const getEdgeValues = (element: CertificateElement) => ({
-    left: element.x,
-    right: element.x + element.width,
-    top: element.y,
-    bottom: element.y + element.height,
-    centerX: element.x + element.width / 2,
-    centerY: element.y + element.height / 2,
-  });
-
-  const computeDistanceGuides = useCallback(
-    (elementId: string, nextX: number, nextY: number) => {
-      if (!isAltPressed) {
-        setDistanceGuides([]);
-        return;
-      }
-
-      const current = elements.find((entry) => entry.id === elementId);
-      if (!current) {
-        setDistanceGuides([]);
-        return;
-      }
-
-      const moving = {
-        ...current,
-        x: nextX,
-        y: nextY,
-      };
-      const movingEdge = getEdgeValues(moving);
-
-      const guides: DistanceGuide[] = [
-        {
-          x1: 0,
-          y1: movingEdge.centerY,
-          x2: movingEdge.left,
-          y2: movingEdge.centerY,
-          label: `${Math.round((movingEdge.left / 100) * canvasWidth)}px`,
-        },
-        {
-          x1: movingEdge.right,
-          y1: movingEdge.centerY,
-          x2: 100,
-          y2: movingEdge.centerY,
-          label: `${Math.round(((100 - movingEdge.right) / 100) * canvasWidth)}px`,
-        },
-        {
-          x1: movingEdge.centerX,
-          y1: 0,
-          x2: movingEdge.centerX,
-          y2: movingEdge.top,
-          label: `${Math.round((movingEdge.top / 100) * canvasHeight)}px`,
-        },
-        {
-          x1: movingEdge.centerX,
-          y1: movingEdge.bottom,
-          x2: movingEdge.centerX,
-          y2: 100,
-          label: `${Math.round(((100 - movingEdge.bottom) / 100) * canvasHeight)}px`,
-        },
-      ];
-
-      let nearestHorizontal: DistanceGuide | null = null;
-      let nearestHorizontalGap = Number.POSITIVE_INFINITY;
-      let nearestVertical: DistanceGuide | null = null;
-      let nearestVerticalGap = Number.POSITIVE_INFINITY;
-
-      elements
-        .filter((entry) => entry.id !== elementId)
-        .forEach((entry) => {
-          const target = getEdgeValues(entry);
-          const verticalOverlap =
-            Math.max(movingEdge.top, target.top) <= Math.min(movingEdge.bottom, target.bottom);
-          const horizontalOverlap =
-            Math.max(movingEdge.left, target.left) <= Math.min(movingEdge.right, target.right);
-
-          if (verticalOverlap) {
-            if (target.left >= movingEdge.right) {
-              const gap = target.left - movingEdge.right;
-              if (gap < nearestHorizontalGap) {
-                nearestHorizontalGap = gap;
-                nearestHorizontal = {
-                  x1: movingEdge.right,
-                  y1: movingEdge.centerY,
-                  x2: target.left,
-                  y2: movingEdge.centerY,
-                  label: `${Math.round((gap / 100) * canvasWidth)}px`,
-                };
-              }
-            }
-
-            if (target.right <= movingEdge.left) {
-              const gap = movingEdge.left - target.right;
-              if (gap < nearestHorizontalGap) {
-                nearestHorizontalGap = gap;
-                nearestHorizontal = {
-                  x1: target.right,
-                  y1: movingEdge.centerY,
-                  x2: movingEdge.left,
-                  y2: movingEdge.centerY,
-                  label: `${Math.round((gap / 100) * canvasWidth)}px`,
-                };
-              }
-            }
-          }
-
-          if (horizontalOverlap) {
-            if (target.top >= movingEdge.bottom) {
-              const gap = target.top - movingEdge.bottom;
-              if (gap < nearestVerticalGap) {
-                nearestVerticalGap = gap;
-                nearestVertical = {
-                  x1: movingEdge.centerX,
-                  y1: movingEdge.bottom,
-                  x2: movingEdge.centerX,
-                  y2: target.top,
-                  label: `${Math.round((gap / 100) * canvasHeight)}px`,
-                };
-              }
-            }
-
-            if (target.bottom <= movingEdge.top) {
-              const gap = movingEdge.top - target.bottom;
-              if (gap < nearestVerticalGap) {
-                nearestVerticalGap = gap;
-                nearestVertical = {
-                  x1: movingEdge.centerX,
-                  y1: target.bottom,
-                  x2: movingEdge.centerX,
-                  y2: movingEdge.top,
-                  label: `${Math.round((gap / 100) * canvasHeight)}px`,
-                };
-              }
-            }
-          }
-        });
-
-      if (nearestHorizontal && nearestHorizontalGap < 40) {
-        guides.push(nearestHorizontal);
-      }
-
-      if (nearestVertical && nearestVerticalGap < 40) {
-        guides.push(nearestVertical);
-      }
-
-      setDistanceGuides(guides);
-    },
-    [elements, canvasWidth, canvasHeight, isAltPressed]
-  );
 
   const handleElementSelect = useCallback(
     (elementId: string, e: React.MouseEvent) => {
@@ -326,172 +215,6 @@ const Canvas: React.FC<CanvasProps> = ({
     setDistanceGuides([]);
   }, [setSelectedElementId]);
 
-  const handleElementDrag = useCallback(
-    (elementId: string, deltaX: number, deltaY: number) => {
-      const element = elements.find((el) => el.id === elementId);
-      if (!element) return;
-
-      // Convert pixel delta to percentage
-      const percentDeltaX = (deltaX / canvasWidth) * 100;
-      const percentDeltaY = (deltaY / canvasHeight) * 100;
-
-      let newX = Math.max(0, Math.min(100, element.x + percentDeltaX));
-      let newY = Math.max(0, Math.min(100, element.y + percentDeltaY));
-
-      const guides: GuideLine[] = [];
-      const edgeThreshold = 0.7;
-      const alignThreshold = 0.9;
-
-      const moving = {
-        left: newX,
-        right: newX + element.width,
-        top: newY,
-        bottom: newY + element.height,
-        centerX: newX + element.width / 2,
-        centerY: newY + element.height / 2,
-      };
-
-      const xCandidates: Array<{ move: 'left' | 'centerX' | 'right'; target: number }> = [
-        { move: 'left', target: 0 },
-        { move: 'centerX', target: 50 },
-        { move: 'right', target: 100 },
-      ];
-
-      const yCandidates: Array<{ move: 'top' | 'centerY' | 'bottom'; target: number }> = [
-        { move: 'top', target: 0 },
-        { move: 'centerY', target: 50 },
-        { move: 'bottom', target: 100 },
-      ];
-
-      elements
-        .filter((entry) => entry.id !== elementId)
-        .forEach((entry) => {
-          const target = getEdgeValues(entry);
-          xCandidates.push(
-            { move: 'left', target: target.left },
-            { move: 'centerX', target: target.centerX },
-            { move: 'right', target: target.right }
-          );
-          yCandidates.push(
-            { move: 'top', target: target.top },
-            { move: 'centerY', target: target.centerY },
-            { move: 'bottom', target: target.bottom }
-          );
-        });
-
-      const bestX = xCandidates
-        .map((candidate) => {
-          const current = moving[candidate.move];
-          return {
-            candidate,
-            diff: candidate.target - current,
-            absDiff: Math.abs(candidate.target - current),
-          };
-        })
-        .sort((a, b) => a.absDiff - b.absDiff)[0];
-
-      const bestY = yCandidates
-        .map((candidate) => {
-          const current = moving[candidate.move];
-          return {
-            candidate,
-            diff: candidate.target - current,
-            absDiff: Math.abs(candidate.target - current),
-          };
-        })
-        .sort((a, b) => a.absDiff - b.absDiff)[0];
-
-      if (bestX && bestX.absDiff <= alignThreshold) {
-        newX += bestX.diff;
-        guides.push({ type: 'vertical', position: bestX.candidate.target });
-      } else if (Math.abs(moving.centerX - 50) <= edgeThreshold) {
-        guides.push({ type: 'vertical', position: 50 });
-      }
-
-      if (bestY && bestY.absDiff <= alignThreshold) {
-        newY += bestY.diff;
-        guides.push({ type: 'horizontal', position: bestY.candidate.target });
-      } else if (Math.abs(moving.centerY - 50) <= edgeThreshold) {
-        guides.push({ type: 'horizontal', position: 50 });
-      }
-
-      if (snapToGrid) {
-        newX = snapValue(newX, 1);
-        newY = snapValue(newY, 1);
-
-        const centerX = newX + element.width / 2;
-        const centerY = newY + element.height / 2;
-        if (Math.abs(centerX - 50) <= 1) {
-          newX = 50 - element.width / 2;
-        }
-        if (Math.abs(centerY - 50) <= 1) {
-          newY = 50 - element.height / 2;
-        }
-      }
-
-      newX = Math.max(0, Math.min(100 - element.width, newX));
-      newY = Math.max(0, Math.min(100 - element.height, newY));
-
-      setActiveGuides(showGuides ? guides : []);
-      computeDistanceGuides(elementId, newX, newY);
-
-      updateElement(elementId, { x: newX, y: newY });
-    },
-    [
-      elements,
-      canvasWidth,
-      canvasHeight,
-      updateElement,
-      snapToGrid,
-      snapValue,
-      showGuides,
-      computeDistanceGuides,
-    ]
-  );
-
-  const handleDragEnd = useCallback(() => {
-    setActiveGuides([]);
-    if (!isAltPressed) {
-      setDistanceGuides([]);
-    }
-  }, [isAltPressed]);
-
-  const handleElementResize = useCallback(
-    (
-      elementId: string,
-      resize: { width: number; height: number; x: number; y: number }
-    ) => {
-      const element = elements.find((entry) => entry.id === elementId);
-      if (!element) return;
-
-      let percentX = (resize.x / canvasWidth) * 100;
-      let percentY = (resize.y / canvasHeight) * 100;
-      let percentWidth = (resize.width / canvasWidth) * 100;
-      let percentHeight = (resize.height / canvasHeight) * 100;
-
-      if (snapToGrid) {
-        percentX = snapValue(percentX, 0.5);
-        percentY = snapValue(percentY, 0.5);
-        percentWidth = snapValue(percentWidth, 0.5);
-        percentHeight = snapValue(percentHeight, 0.5);
-      }
-
-      percentWidth = Math.max(2, Math.min(100, percentWidth));
-      percentHeight = Math.max(2, Math.min(100, percentHeight));
-
-      percentX = Math.max(0, Math.min(100 - percentWidth, percentX));
-      percentY = Math.max(0, Math.min(100 - percentHeight, percentY));
-
-      updateElement(elementId, {
-        x: percentX,
-        y: percentY,
-        width: percentWidth,
-        height: percentHeight,
-      });
-    },
-    [elements, canvasWidth, canvasHeight, updateElement, snapToGrid, snapValue]
-  );
-
   const selectedCenterX = selectedElement ? selectedElement.x + selectedElement.width / 2 : null;
   const selectedCenterY = selectedElement ? selectedElement.y + selectedElement.height / 2 : null;
   const fallbackGuides: GuideLine[] = [];
@@ -506,6 +229,7 @@ const Canvas: React.FC<CanvasProps> = ({
   return (
     <div ref={viewportRef} className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 p-4 overflow-hidden min-h-[55vh] lg:min-h-0">
       <div
+        ref={canvasRef}
         style={{
           width: `${canvasWidth * renderedScale}px`,
           height: `${canvasHeight * renderedScale}px`,
@@ -516,6 +240,7 @@ const Canvas: React.FC<CanvasProps> = ({
           overflow: 'hidden',
           border: '1px solid #e5e7eb',
         }}
+        onMouseDown={() => setIsCanvasActive(true)}
         onClick={handleCanvasClick}
       >
         {/* Guide Grid (optional) */}
@@ -620,18 +345,16 @@ const Canvas: React.FC<CanvasProps> = ({
 
         {/* Elements Layer */}
         <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 1 }}>
-          {elements.map((element) => (
+          {sortedElements.map((element) => (
             <DraggableItem
               key={element.id}
               element={element}
               isSelected={selectedElementId === element.id}
               onSelect={(e) => handleElementSelect(element.id, e)}
-              onDrag={(dx, dy) => handleElementDrag(element.id, dx, dy)}
-              onResize={(resize) => handleElementResize(element.id, resize)}
-              onDragEnd={handleDragEnd}
               scale={renderedScale}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
+              canvasRect={canvasRect}
             />
           ))}
         </div>

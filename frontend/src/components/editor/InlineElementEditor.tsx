@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CertificateElement } from '@/types/CertificateTemplate';
 import { useEditorStore } from '@/store/useEditorStore';
 
@@ -12,6 +12,44 @@ const InlineElementEditor: React.FC<InlineElementEditorProps> = ({ element }) =>
   const updateElement = useEditorStore((state) => state.updateElement);
   const selectionColor = useEditorStore((state) => state.selectionColor);
   const setSelectionColor = useEditorStore((state) => state.setSelectionColor);
+  const elements = useEditorStore((state) => state.elements);
+  const selectedElementId = useEditorStore((state) => state.selectedElementId);
+  const setSelectedElementId = useEditorStore((state) => state.setSelectedElementId);
+
+  const sortedLayers = useMemo(
+    () => [...elements].sort((left, right) => right.zIndex - left.zIndex),
+    [elements]
+  );
+
+  const layerPanel = (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Layers</p>
+      <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+        {sortedLayers.map((layer) => {
+          const isActive = layer.id === selectedElementId;
+          const isBoundary = layer.id.startsWith('system-boundary-');
+          return (
+            <button
+              key={layer.id}
+              onClick={() => setSelectedElementId(layer.id)}
+              className={`w-full text-left px-2 py-1.5 rounded text-xs border transition ${
+                isActive
+                  ? 'bg-blue-50 border-blue-300 text-blue-700'
+                  : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {layer.label} {isBoundary ? '(Locked)' : ''}
+                </span>
+                <span className="text-[10px] text-gray-500">z:{layer.zIndex}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   if (!element) {
     return (
@@ -20,6 +58,7 @@ const InlineElementEditor: React.FC<InlineElementEditorProps> = ({ element }) =>
         <p className="text-xs text-gray-600">
           Select any element on canvas to edit content, alignment, size and style.
         </p>
+        <div className="mt-3">{layerPanel}</div>
       </div>
     );
   }
@@ -58,6 +97,8 @@ const InlineElementEditor: React.FC<InlineElementEditorProps> = ({ element }) =>
         <h4 className="text-sm font-semibold text-gray-900">Quick Edit</h4>
         <p className="text-xs text-gray-500">{element.label} ({element.type})</p>
       </div>
+
+      {layerPanel}
 
       <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
         <label className="text-xs text-gray-600 block mb-1">Selection Color</label>

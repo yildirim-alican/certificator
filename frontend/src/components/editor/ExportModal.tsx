@@ -101,7 +101,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
                   <>
                     <Eye className="text-gray-400 mb-2" size={48} />
                     <p className="text-gray-600 text-center">
-                      Click "Generate Preview" to see how your certificate will look
+                      Click &quot;Generate Preview&quot; to see how your certificate will look
                     </p>
                   </>
                 )}
