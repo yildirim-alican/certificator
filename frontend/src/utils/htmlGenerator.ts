@@ -73,11 +73,24 @@ export const generateTemplateHTML = (
         }
       `;
     } else if (element.type === 'shape') {
+      const bg = element.gradientEnabled
+        ? `linear-gradient(${element.gradientAngle ?? 135}deg, ${element.gradientFrom ?? '#e2e8f0'}, ${element.gradientTo ?? '#94a3b8'})`
+        : (element.backgroundColor || 'transparent');
+      const br = element.shapeType === 'circle'
+        ? '50%'
+        : element.borderRadius
+          ? `${element.borderRadius}px`
+          : '0';
+      const clip = element.shapeType === 'triangle'
+        ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);'
+        : '';
       css += `
         #element-${element.id} {
-          background-color: ${element.backgroundColor || '#ffffff'};
-          border: ${element.borderWidth || 1}px solid ${element.borderColor || '#000000'};
-          ${element.shapeType === 'circle' ? 'border-radius: 50%;' : ''}
+          background: ${bg};
+          border: ${element.borderWidth || 0}px solid ${element.borderColor || 'transparent'};
+          border-radius: ${br};
+          ${clip}
+          opacity: ${element.opacity ?? 1};
         }
       `;
     }

@@ -12,11 +12,22 @@ interface EditorStoreState {
   addElement: (element: CertificateElement) => void;
   updateElement: (id: string, updates: Partial<CertificateElement>) => void;
   deleteElement: (id: string) => void;
+  deleteElements: (ids: string[]) => void;
   reorderElements: (newElements: CertificateElement[]) => void;
 
-  // Selection State
-  selectedElementId: string | null;
+  // Undo/Redo History
+  history: CertificateElement[][];
+  historyIndex: number;
+  addToHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+
+  // Selection State — single + multi
+  selectedElementId: string | null;          // primary selection (single)
   setSelectedElementId: (id: string | null) => void;
+  selectedElementIds: string[];              // multi-select set
+  setSelectedElementIds: (ids: string[]) => void;
+  toggleElementSelection: (id: string) => void; // shift+click
 
   // Canvas State
   scale: number;
@@ -52,23 +63,120 @@ export const useEditorStore = create<EditorStoreState>((set) => ({
   addElement: (element) =>
     set((state) => ({
       elements: [...state.elements, element],
+      history: [
+        ...state.history.slice(0, state.historyIndex + 1),
+        [...state.elements, element],
+      ],
+      historyIndex: state.historyIndex + 1,
     })),
 
   updateElement: (id, updates) =>
-    set((state) => ({
-      elements: state.elements.map((el) => (el.id === id ? { ...el, ...updates } : el)),
-    })),
+    set((state) => {
+      const updatedElements = state.elements.map((el) => (el.id === id ? { ...el, ...updates } : el));
+      return {
+        elements: updatedElements,
+        history: [
+          ...state.history.slice(0, state.historyIndex + 1),
+          updatedElements,
+        ],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
 
   deleteElement: (id) =>
+    set((state) => {
+      const filteredElements = state.elements.filter((el) => el.id !== id);
+      return {
+        elements: filteredElements,
+        selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
+        selectedElementIds: state.selectedElementIds.filter((sid) => sid !== id),
+        history: [
+          ...state.history.slice(0, state.historyIndex + 1),
+          filteredElements,
+        ],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  deleteElements: (ids) =>
+    set((state) => {
+      const idSet = new Set(ids);
+      const filteredElements = state.elements.filter((el) => !idSet.has(el.id));
+      return {
+        elements: filteredElements,
+        selectedElementId: idSet.has(state.selectedElementId ?? '') ? null : state.selectedElementId,
+        selectedElementIds: state.selectedElementIds.filter((sid) => !idSet.has(sid)),
+        history: [
+          ...state.history.slice(0, state.historyIndex + 1),
+          filteredElements,
+        ],
+        historyIndex: state.historyIndex + 1,
+      };
+    }),
+
+  reorderElements: (newElements) => set((state) => ({
+    elements: newElements,
+    history: [
+      ...state.history.slice(0, state.historyIndex + 1),
+      newElements,
+    ],
+    historyIndex: state.historyIndex + 1,
+  })),
+
+  history: [],
+  historyIndex: -1,
+  addToHistory: () =>
     set((state) => ({
-      elements: state.elements.filter((el) => el.id !== id),
-      selectedElementId: state.selectedElementId === id ? null : state.selectedElementId,
+      history: [
+        ...state.history.slice(0, state.historyIndex + 1),
+        state.elements,
+      ],
+      historyIndex: state.historyIndex + 1,
     })),
 
-  reorderElements: (newElements) => set({ elements: newElements }),
+  undo: () =>
+    set((state) => {
+      if (state.historyIndex > 0) {
+        const newIndex = state.historyIndex - 1;
+        return {
+          elements: state.history[newIndex],
+          historyIndex: newIndex,
+        };
+      }
+      return state;
+    }),
+
+  redo: () =>
+    set((state) => {
+      if (state.historyIndex < state.history.length - 1) {
+        const newIndex = state.historyIndex + 1;
+        return {
+          elements: state.history[newIndex],
+          historyIndex: newIndex,
+        };
+      }
+      return state;
+    }),
 
   selectedElementId: null,
-  setSelectedElementId: (id) => set({ selectedElementId: id }),
+  setSelectedElementId: (id) =>
+    set({ selectedElementId: id, selectedElementIds: id ? [id] : [] }),
+
+  selectedElementIds: [],
+  setSelectedElementIds: (ids) =>
+    set({ selectedElementIds: ids, selectedElementId: ids[0] ?? null }),
+
+  toggleElementSelection: (id) =>
+    set((state) => {
+      const already = state.selectedElementIds.includes(id);
+      const next = already
+        ? state.selectedElementIds.filter((sid) => sid !== id)
+        : [...state.selectedElementIds, id];
+      return {
+        selectedElementIds: next,
+        selectedElementId: next[0] ?? null,
+      };
+    }),
 
   scale: 1,
   setScale: (scale) => set({ scale }),
@@ -93,11 +201,14 @@ export const useEditorStore = create<EditorStoreState>((set) => ({
       template: null,
       elements: [],
       selectedElementId: null,
+      selectedElementIds: [],
       scale: 1,
       offset: { x: 0, y: 0 },
       isDragging: false,
       showGuides: true,
       snapToGrid: true,
       selectionColor: '#3b82f6',
+      history: [],
+      historyIndex: -1,
     }),
 }));

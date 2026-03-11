@@ -9,12 +9,13 @@ import Toolbar from '@/components/editor/Toolbar';
 import SystemLayoutPicker from '@/components/editor/SystemLayoutPicker';
 import InlineElementEditor from '@/components/editor/InlineElementEditor';
 import ExportModal from '@/components/editor/ExportModal';
-import TemplateSelector from '@/components/editor/TemplateSelector';
 import QuickEdit from '@/components/editor/QuickEdit';
+import LayerPanel from '@/components/editor/LayerPanel';
 import Button from '@/components/shared/Button';
 import Input from '@/components/shared/Input';
-import { Save, Download, Eye, FileText, Home, Sparkles } from 'lucide-react';
-import { CertificateElement, CertificateTemplate } from '@/types/CertificateTemplate';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
+import { Save, Download, Eye, FileText, Home, Sparkles, Type, Square, Circle, Image as ImageIcon } from 'lucide-react';
+import { CertificateElement } from '@/types/CertificateTemplate';
 import { QuickEditData } from '@/components/editor/QuickEdit';
 import {
   LayoutOrientation,
@@ -48,6 +49,9 @@ export default function EditorPage() {
   const selectedElementId = useEditorStore((state) => state.selectedElementId);
   const setSelectedElementId = useEditorStore((state) => state.setSelectedElementId);
   const elements = useEditorStore((state) => state.elements);
+  const addElement = useEditorStore((state) => state.addElement);
+  const undo = useEditorStore((state) => state.undo);
+  const redo = useEditorStore((state) => state.redo);
   const addTemplate = useTemplateStore((state) => state.addTemplate);
   const updateTemplateInStore = useTemplateStore((state) => state.updateTemplate);
   const templates = useTemplateStore((state) => state.templates);
@@ -56,18 +60,28 @@ export default function EditorPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showQuickEdit, setShowQuickEdit] = useState(false);
-  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [activePresetId, setActivePresetId] = useState<string | null>(() => {
+    // Initialize with first digital landscape preset
+    const defaultPreset = systemLayoutPresets.find(
+      (p) => p.category === 'digital' && p.orientation === 'landscape'
+    );
+    return defaultPreset?.id || null;
+  });
   const [activeOrientation, setActiveOrientation] = useState<LayoutOrientation>('landscape');
-  const [issuerLogoSrc, setIssuerLogoSrc] = useState<string>('');
-  const [sponsorLogos, setSponsorLogos] = useState<string[]>([]);
+  const [brandLogos, setBrandLogos] = useState<string[]>([]);
+  const [sidebarTab, setSidebarTab] = useState<'layout' | 'edit'>('layout');
+  const [showLayerPanel, setShowLayerPanel] = useState(true);
 
   const ALLOWED_VARIABLES = ['[recipient.name]', '[recipient.surname]', '[certificate.success_rate]'];
 
   const selectedElement = elements.find((el) => el.id === selectedElementId) || null;
-  const ribbonTemplates =
-    template && !templates.some((entry) => entry.id === template.id)
-      ? [template, ...templates]
-      : templates;
+  // Auto-switch to edit tab when user selects an element
+  useEffect(() => {
+    if (selectedElementId) {
+      setSidebarTab('edit');
+    }
+  }, [selectedElementId]);
+
   useEffect(() => {
     if (!template) {
       // Initialize with empty template
@@ -87,30 +101,37 @@ export default function EditorPage() {
     }
   }, [templateId, template, setTemplate]);
 
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // TODO: Call API to save template
-      console.log('Saving template:', {
-        id: template?.id,
-        name: template?.name,
-        elements,
-      });
-
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       if (template) {
+        // Sync live elements into the template before persisting
+        const templateToSave = { ...template, elements, updatedAt: new Date() };
         const exists = templates.some((entry) => entry.id === template.id);
         if (exists) {
-          updateTemplateInStore(template.id, template);
+          updateTemplateInStore(template.id, templateToSave);
         } else {
-          addTemplate(template);
+          addTemplate(templateToSave);
         }
+        setTemplate(templateToSave);
       }
-
-      // Show success message
-      alert('Template saved successfully!');
+      alert('Template saved!');
     } catch (error) {
       console.error('Failed to save:', error);
       alert('Failed to save template');
@@ -176,63 +197,64 @@ export default function EditorPage() {
 
     const withCoreZones: CertificateElement[] = [...withBoundary];
 
-    if (!withCoreZones.some((element) => element.label.toLowerCase().includes('issuer logo'))) {
-      withCoreZones.push({
-        id: `${preset.id}-issuer-logo`,
-        type: 'image',
-        label: 'Issuer Logo',
-        x: issuerLogoX,
-        y: logoY,
-        width: defaultLogoWidth,
-        height: defaultLogoHeight,
-        rotation: 0,
-        zIndex: 10,
-        visible: true,
-        src: issuerLogoSrc,
-        objectFit: 'contain',
-        opacity: 1,
-      });
-    }
+    const hasLogos = withCoreZones.some((element) =>
+      element.label.toLowerCase().includes('logo')
+    );
 
-    // Add sponsor logos (multiple)
-    sponsorLogos.forEach((logoSrc, logoIndex) => {
-      if (!withCoreZones.some((element) => element.id === `${preset.id}-sponsor-logo-${logoIndex}`)) {
-        const spacing = defaultLogoWidth + 2; // 2 units spacing between logos
+    if (!hasLogos) {
+      if (brandLogos.length > 0) {
         withCoreZones.push({
-          id: `${preset.id}-sponsor-logo-${logoIndex}`,
+          id: `${preset.id}-issuer-logo`,
           type: 'image',
-          label: `Sponsor Logo ${logoIndex + 1}`,
-          x: sponsorLogoX - (sponsorLogos.length - 1) * spacing / 2 + logoIndex * spacing,
+          label: 'Issuer Logo',
+          x: issuerLogoX,
           y: logoY,
           width: defaultLogoWidth,
           height: defaultLogoHeight,
           rotation: 0,
-          zIndex: 11 + logoIndex,
+          zIndex: 10,
           visible: true,
-          src: logoSrc,
+          src: brandLogos[0] || '',
+          objectFit: 'contain',
+          opacity: 1,
+        });
+
+        const sponsorBrandLogos = brandLogos.slice(1);
+        sponsorBrandLogos.forEach((logoSrc, logoIndex) => {
+          const spacing = defaultLogoWidth + 2;
+          withCoreZones.push({
+            id: `${preset.id}-sponsor-logo-${logoIndex}`,
+            type: 'image',
+            label: `Sponsor Logo ${logoIndex + 1}`,
+            x: sponsorLogoX - (sponsorBrandLogos.length - 1) * spacing / 2 + logoIndex * spacing,
+            y: logoY,
+            width: defaultLogoWidth,
+            height: defaultLogoHeight,
+            rotation: 0,
+            zIndex: 11 + logoIndex,
+            visible: true,
+            src: logoSrc,
+            objectFit: 'contain',
+            opacity: 1,
+          });
+        });
+      } else {
+        withCoreZones.push({
+          id: `${preset.id}-issuer-logo`,
+          type: 'image',
+          label: 'Issuer Logo',
+          x: issuerLogoX,
+          y: logoY,
+          width: defaultLogoWidth,
+          height: defaultLogoHeight,
+          rotation: 0,
+          zIndex: 10,
+          visible: true,
+          src: '',
           objectFit: 'contain',
           opacity: 1,
         });
       }
-    });
-
-    // If no sponsor logos are added yet, add placeholder
-    if (sponsorLogos.length === 0 && !withCoreZones.some((element) => element.label.toLowerCase().includes('sponsor logo'))) {
-      withCoreZones.push({
-        id: `${preset.id}-sponsor-logo-0`,
-        type: 'image',
-        label: 'Sponsor Logo 1',
-        x: sponsorLogoX,
-        y: logoY,
-        width: defaultLogoWidth,
-        height: defaultLogoHeight,
-        rotation: 0,
-        zIndex: 11,
-        visible: true,
-        src: '',
-        objectFit: 'contain',
-        opacity: 1,
-      });
     }
 
     if (
@@ -270,11 +292,11 @@ export default function EditorPage() {
       if (element.type === 'image') {
         let nextSrc = element.src;
         if (element.label.toLowerCase().includes('issuer logo')) {
-          nextSrc = issuerLogoSrc || element.src;
+          nextSrc = brandLogos[0] || element.src;
         } else if (element.label.toLowerCase().includes('sponsor logo')) {
           const sponsorMatch = element.label.match(/sponsor logo (\d+)/i);
-          const logoIndex = sponsorMatch ? parseInt(sponsorMatch[1]) - 1 : 0;
-          nextSrc = sponsorLogos[logoIndex] || element.src;
+          const logoIndex = sponsorMatch ? parseInt(sponsorMatch[1]) : 0;
+          nextSrc = brandLogos[logoIndex + 1] || element.src;
         }
 
         return {
@@ -334,41 +356,40 @@ export default function EditorPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleIssuerLogoUpload = (file: File) => {
+  const handleBrandLogoUpload = (file: File, logoIndex: number = 0) => {
     readFileAsDataUrl(file, (dataUrl) => {
-      setIssuerLogoSrc(dataUrl);
+      const newLogos = [...brandLogos];
+      newLogos[logoIndex] = dataUrl;
+      setBrandLogos(newLogos);
+      
       elements
-        .filter((element) => element.type === 'image' && element.label.toLowerCase().includes('issuer logo'))
+        .filter((element) => element.type === 'image' && element.label.toLowerCase().includes('logo'))
         .forEach((element) => {
           useEditorStore.getState().updateElement(element.id, { src: dataUrl });
         });
     });
   };
 
-  const handleSponsorLogoUpload = (file: File, logoIndex: number = 0) => {
-    readFileAsDataUrl(file, (dataUrl) => {
-      const newLogos = [...sponsorLogos];
-      newLogos[logoIndex] = dataUrl;
-      setSponsorLogos(newLogos);
-      
-      elements
-        .filter((element) => element.label.match(new RegExp(`sponsor logo ${logoIndex + 1}`, 'i')))
-        .forEach((element) => {
-          useEditorStore.getState().updateElement(element.id, { src: dataUrl });
-        });
-    });
+  const handleRemoveBrandLogo = (index: number) => {
+    const newLogos = brandLogos.filter((_, i) => i !== index);
+    setBrandLogos(newLogos);
   };
 
   const handleQuickGenerate = (data: QuickEditData) => {
     const uploadedLogos = data.sponsorLogos || [];
     if (uploadedLogos.length > 0) {
-      setSponsorLogos(uploadedLogos);
+      setBrandLogos(uploadedLogos);
       elements
-        .filter((element) => element.type === 'image' && element.label.toLowerCase().includes('sponsor logo'))
+        .filter((element) => element.type === 'image' && element.label.toLowerCase().includes('logo'))
         .forEach((element) => {
-          const matched = element.label.match(/sponsor logo\s*(\d+)/i);
-          const logoIndex = matched ? Math.max(parseInt(matched[1], 10) - 1, 0) : 0;
-          const src = uploadedLogos[logoIndex];
+          let logoIndex = 0;
+          if (element.label.toLowerCase().includes('issuer logo')) {
+            logoIndex = 0;
+          } else {
+            const matched = element.label.match(/sponsor logo\s*(\d+)/i);
+            logoIndex = matched ? Math.max(parseInt(matched[1], 10), 1) : 1;
+          }
+          const src = uploadedLogos[logoIndex - 1] || uploadedLogos[logoIndex];
           if (src) {
             useEditorStore.getState().updateElement(element.id, { src });
           }
@@ -390,140 +411,225 @@ export default function EditorPage() {
   };
 
   if (!template) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-gray-500">Loading template...</p>
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-100 via-slate-100 to-gray-200">
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-gray-200 shadow-sm">
-        <div className="px-4 lg:px-6 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+    <div className="h-screen flex flex-col overflow-hidden bg-gray-100">
+      <header className="flex-shrink-0 z-30 bg-white border-b border-gray-200">
+        <div className="px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Button
+              size="sm"
               variant="secondary"
               onClick={() => router.push('/')}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5"
             >
-              <Home size={18} />
-              Main Menu
+              <Home size={14} />
+              Home
             </Button>
-            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
-              <Sparkles size={12} />
-              {template.orientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait'}
+            <span className="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-100 flex items-center gap-1">
+              <Sparkles size={10} />
+              {template.orientation === 'landscape' ? 'A4 L' : 'A4 P'}
             </span>
-            <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-              {elements.length} Elements
+            <span className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-500">
+              {elements.length} items
             </span>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Input
+              value={template.name}
+              onChange={(e) => updateTemplateMetadata(e.target.value, template.description)}
+              className="w-48 text-xs"
+              placeholder="Template name"
+            />
+          </div>
+
+          <nav className="flex items-center gap-1.5">
             <Button
+              size="sm"
+              variant="primary"
+              onClick={handleSave}
+              disabled={isSaving || !template.name.trim()}
+              className="flex items-center gap-1.5"
+            >
+              <Save size={14} />
+              {isSaving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button
+              size="sm"
               variant={showPreview ? 'primary' : 'secondary'}
               onClick={() => setShowPreview(!showPreview)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5"
             >
-              <Eye size={18} />
+              <Eye size={14} />
               {showPreview ? 'Edit' : 'Preview'}
             </Button>
             <Button
+              size="sm"
               variant="secondary"
               onClick={handleDownloadPDF}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5"
             >
-              <Download size={18} />
+              <Download size={14} />
               Export
             </Button>
             <Button
+              size="sm"
               variant="secondary"
               onClick={handleBulkGenerate}
-              className="flex items-center gap-2"
+              className="flex items-center gap-1.5"
             >
-              <FileText size={18} />
-              Bulk Generate
+              <FileText size={14} />
+              Bulk
             </Button>
           </nav>
         </div>
       </header>
 
-      {/* Template Selector Ribbon */}
-      {!showPreview && (
-        <TemplateSelector
-          templates={ribbonTemplates}
-          activeTemplateId={template?.id || null}
-          onSelectTemplate={(selectedTemplate) => {
-            setTemplate(selectedTemplate);
-            reorderElements(selectedTemplate.elements);
-          }}
-          onCreateNew={() => {
-            const newTemplate: CertificateTemplate = {
-              id: `template-${Date.now()}`,
-              name: 'New Template',
-              description: '',
-              orientation: 'landscape',
-              width: 297,
-              height: 210,
-              backgroundColor: '#ffffff',
-              elements: [],
-              variables: ['[recipient.name]', '[recipient.surname]'],
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-            setTemplate(newTemplate);
-            addTemplate(newTemplate);
-          }}
-        />
-      )}
-
       {/* Main Editor */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {!showPreview && (
-          <div className="w-full lg:w-[360px] lg:flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 p-4 lg:p-5 overflow-y-scroll [scrollbar-gutter:stable] max-h-screen">
-            <SystemLayoutPicker
-              presets={systemLayoutPresets}
-              activePresetId={activePresetId}
-              activeOrientation={activeOrientation}
-              onApplyPreset={handleApplyPreset}
-              onOrientationChange={handleOrientationChange}
-              onIssuerLogoUpload={handleIssuerLogoUpload}
-              onSponsorLogoUpload={handleSponsorLogoUpload}
-            />
-            <InlineElementEditor element={selectedElement} />
+          <div className="w-full lg:w-[300px] lg:flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col overflow-hidden">
+            {/* Sidebar tab bar */}
+            <div className="flex border-b border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => setSidebarTab('layout')}
+                className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+                  sidebarTab === 'layout'
+                    ? 'border-b-2 border-gray-900 text-gray-900'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Layouts
+              </button>
+              <button
+                onClick={() => setSidebarTab('edit')}
+                className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  sidebarTab === 'edit'
+                    ? 'border-b-2 border-gray-900 text-gray-900'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Edit
+                {selectedElement && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+                )}
+              </button>
+            </div>
+
+            {/* Sidebar content */}
+            <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+              {sidebarTab === 'layout' && (
+                <SystemLayoutPicker
+                  presets={systemLayoutPresets}
+                  activePresetId={activePresetId}
+                  activeOrientation={activeOrientation}
+                  onApplyPreset={handleApplyPreset}
+                  onOrientationChange={handleOrientationChange}
+                  onBrandLogoUpload={handleBrandLogoUpload}
+                  brandLogos={brandLogos}
+                  onRemoveBrandLogo={handleRemoveBrandLogo}
+                />
+              )}
+              {sidebarTab === 'edit' && (
+                <InlineElementEditor element={selectedElement} />
+              )}
+            </div>
           </div>
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Insert toolbar strip */}
+          {!showPreview && (
+            <div className="flex-shrink-0 bg-white border-b border-gray-200 px-3 py-1 flex items-center gap-0.5">
+              <span className="text-[10px] text-gray-400 tracking-wide mr-2">Insert</span>
+              <button
+                onClick={() => {
+                  const id = `text-${Date.now()}`;
+                  addElement({ id, type: 'text', label: 'Text', x: 30, y: 40, width: 30, height: 10, rotation: 0, zIndex: elements.length + 1, visible: true, content: 'New Text', fontSize: 20, fontFamily: 'Arial', fontWeight: 'normal', color: '#1f2937', textAlign: 'center', lineHeight: 1.3, letterSpacing: 0, opacity: 1 });
+                  setSelectedElementId(id);
+                  setSidebarTab('edit');
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                title="Add Text"
+              >
+                <Type size={13} /> Text
+              </button>
+              <button
+                onClick={() => {
+                  const id = `shape-${Date.now()}`;
+                  addElement({ id, type: 'shape', label: 'Rectangle', x: 35, y: 35, width: 20, height: 15, rotation: 0, zIndex: elements.length + 1, visible: true, shapeType: 'rectangle', backgroundColor: '#e2e8f0', borderColor: '#64748b', borderWidth: 2 });
+                  setSelectedElementId(id);
+                  setSidebarTab('edit');
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                title="Add Rectangle"
+              >
+                <Square size={13} /> Rect
+              </button>
+              <button
+                onClick={() => {
+                  const id = `shape-${Date.now()}`;
+                  addElement({ id, type: 'shape', label: 'Circle', x: 40, y: 35, width: 15, height: 15, rotation: 0, zIndex: elements.length + 1, visible: true, shapeType: 'circle', backgroundColor: '#e2e8f0', borderColor: '#64748b', borderWidth: 2 });
+                  setSelectedElementId(id);
+                  setSidebarTab('edit');
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                title="Add Circle"
+              >
+                <Circle size={13} /> Circle
+              </button>
+              <button
+                onClick={() => {
+                  const id = `shape-${Date.now()}`;
+                  addElement({ id, type: 'shape', label: 'Triangle', x: 40, y: 30, width: 15, height: 15, rotation: 0, zIndex: elements.length + 1, visible: true, shapeType: 'triangle', backgroundColor: '#e2e8f0', borderColor: 'transparent', borderWidth: 0 });
+                  setSelectedElementId(id);
+                  setSidebarTab('edit');
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                title="Add Triangle"
+              >
+                <span className="text-sm leading-none">△</span> Triangle
+              </button>
+              <label
+                className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+                title="Upload Image"
+              >
+                <ImageIcon size={13} /> Image
+                <input
+                  type="file"
+                  accept="image/*,.svg"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    const input = e.target;
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const id = `image-${Date.now()}`;
+                      addElement({ id, type: 'image', label: file.name.replace(/\.[^/.]+$/, '') || 'Image', x: 30, y: 30, width: 20, height: 15, rotation: 0, zIndex: elements.length + 1, visible: true, src: reader.result as string, objectFit: 'contain', opacity: 1 });
+                      setSelectedElementId(id);
+                      setSidebarTab('edit');
+                      input.value = '';
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            </div>
+          )}
+
           <Canvas orientation={template.orientation} backgroundColor={template.backgroundColor} />
 
           {!showPreview && <Toolbar />}
-
-          <div className="bg-white border-t border-gray-200 p-3 lg:p-4">
-            <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_auto] gap-2 items-center">
-              <Input
-                value={template.name}
-                onChange={(e) => updateTemplateMetadata(e.target.value, template.description)}
-                className="text-base font-semibold"
-                placeholder="Template name"
-              />
-              <Input
-                value={template.description || ''}
-                onChange={(e) => updateTemplateMetadata(template.name, e.target.value)}
-                placeholder="Template description"
-              />
-              <Button
-                variant="primary"
-                onClick={handleSave}
-                disabled={isSaving || !template.name.trim()}
-                className="flex items-center justify-center gap-2 xl:min-w-[150px]"
-              >
-                <Save size={18} />
-                {isSaving ? 'Creating...' : 'Create'}
-              </Button>
-            </div>
-          </div>
         </div>
+
+        {/* Right: Layer panel */}
+        {!showPreview && (
+          <LayerPanel isOpen={showLayerPanel} onToggle={() => setShowLayerPanel((v) => !v)} />
+        )}
       </div>
 
       {/* Export Modal */}

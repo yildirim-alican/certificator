@@ -2,7 +2,7 @@
 
 import React, { useCallback } from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Ruler, Magnet, Trash2 } from 'lucide-react';
 
 /**
  * Toolbar Component
@@ -26,11 +26,11 @@ const Toolbar: React.FC = () => {
   const isSystemBoundarySelected = !!selectedElement?.id.startsWith('system-boundary-');
 
   const handleZoomIn = useCallback(() => {
-    setScale(Math.min(2, scale * 1.1));
+    setScale(Math.min(4, scale * 1.2));
   }, [scale, setScale]);
 
   const handleZoomOut = useCallback(() => {
-    setScale(Math.max(0.5, scale / 1.1));
+    setScale(Math.max(0.2, scale / 1.2));
   }, [scale, setScale]);
 
   const handleReset = useCallback(() => {
@@ -44,74 +44,68 @@ const Toolbar: React.FC = () => {
   }, [selectedElementId, isSystemBoundarySelected, deleteElement]);
 
   return (
-    <div className="flex items-center gap-3 p-4 bg-white border-b border-gray-200">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleZoomIn}
-          className="p-2 hover:bg-gray-100 rounded-lg transition"
-          title="Zoom In"
-        >
-          <ZoomIn size={20} />
-        </button>
-        <span className="text-sm text-gray-600 min-w-max">{Math.round(scale * 100)}%</span>
+    <div className="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200">
+      {/* Zoom controls */}
+      <div className="flex items-center gap-1">
         <button
           onClick={handleZoomOut}
-          className="p-2 hover:bg-gray-100 rounded-lg transition"
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition"
           title="Zoom Out"
         >
-          <ZoomOut size={20} />
+          <ZoomOut size={16} />
+        </button>
+        <span className="text-xs text-gray-500 min-w-[36px] text-center tabular-nums">
+          {Math.round(scale * 100)}%
+        </span>
+        <button
+          onClick={handleZoomIn}
+          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-md transition"
+          title="Zoom In"
+        >
+          <ZoomIn size={16} />
         </button>
         <button
           onClick={handleReset}
-          className="p-2 hover:bg-gray-100 rounded-lg transition"
+          className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-md transition"
           title="Reset Zoom"
         >
-          <RotateCcw size={20} />
+          <RotateCcw size={14} />
         </button>
       </div>
 
-      <div className="border-l border-gray-200 h-6" />
+      <div className="w-px h-4 bg-gray-200" />
 
+      {/* Guides toggle */}
       <button
         onClick={() => setShowGuides(!showGuides)}
-        className={`px-3 py-2 text-sm rounded-lg transition ${showGuides ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}
+        className={`p-1.5 rounded-md transition ${showGuides ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+        title="Toggle Guides"
       >
-        Guides
+        <Ruler size={16} />
       </button>
 
+      {/* Snap toggle */}
       <button
         onClick={() => setSnapToGrid(!snapToGrid)}
-        className={`px-3 py-2 text-sm rounded-lg transition ${snapToGrid ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}
+        className={`p-1.5 rounded-md transition ${snapToGrid ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+        title="Toggle Snap to Grid"
       >
-        Snap
+        <Magnet size={16} />
       </button>
 
-      <div className="min-w-[140px]">
-        {selectedElementId ? (
+      {/* Delete */}
+      {selectedElementId && !isSystemBoundarySelected && (
+        <>
+          <div className="w-px h-4 bg-gray-200" />
           <button
             onClick={handleDelete}
-            disabled={isSystemBoundarySelected}
-            className="w-full px-3 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition disabled:bg-gray-400"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition"
           >
-            {isSystemBoundarySelected ? 'Boundary Locked' : 'Delete Element'}
+            <Trash2 size={13} />
+            Delete
           </button>
-        ) : (
-          <div className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-400 bg-gray-50 text-center">
-            No Selection
-          </div>
-        )}
-      </div>
-
-      <div className="ml-auto hidden xl:flex items-center gap-2 text-xs text-gray-500">
-        <span className="px-2 py-1 bg-gray-100 rounded border">Del</span>
-        <span>Delete</span>
-        <span className="px-2 py-1 bg-gray-100 rounded border">Arrow</span>
-        <span>Nudge</span>
-        <span className="px-2 py-1 bg-gray-100 rounded border">Shift+Arrow</span>
-        <span>Fast Nudge</span>
-        <span className="px-2 py-1 bg-gray-100 rounded border">Ctrl/Cmd+D</span>
-        <span>Duplicate</span>
-      </div>
+        </>
+      )}
     </div>
   );
 };

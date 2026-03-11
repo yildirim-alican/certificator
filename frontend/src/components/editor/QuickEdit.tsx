@@ -218,7 +218,7 @@ const QuickEdit: React.FC<QuickEditProps> = ({ template, isOpen, onClose, onGene
             ) : (
               <div className="bg-white rounded p-6 h-24 flex items-center justify-center border border-dashed border-gray-300">
                 <p className="text-xs text-gray-500 text-center">
-                  Fill details and click "Generate" to preview your certificate
+                  Fill details and click &quot;Generate&quot; to preview your certificate
                 </p>
               </div>
             )}

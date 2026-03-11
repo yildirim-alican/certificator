@@ -20,12 +20,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantClasses = {
       primary: 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800',
-      secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400',
+      secondary: 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 active:bg-gray-100',
       danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800',
     };
 
     const sizeClasses = {
-      sm: 'px-3 py-1 text-sm',
+      sm: 'px-2.5 py-1.5 text-xs font-medium',
       md: 'px-4 py-2 text-base',
       lg: 'px-6 py-3 text-lg',
     };

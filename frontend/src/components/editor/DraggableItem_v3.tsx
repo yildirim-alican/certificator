@@ -33,6 +33,10 @@ const DraggableItem = React.memo<DraggableItemProps>(
   }) => {
     const selectionColor = useEditorStore((state) => state.selectionColor);
     const updateElement = useEditorStore((state) => state.updateElement);
+    const selectedElementIds = useEditorStore((state) => state.selectedElementIds);
+    const toggleElementSelection = useEditorStore((state) => state.toggleElementSelection);
+
+    const isMultiSelected = selectedElementIds.includes(element.id) && selectedElementIds.length > 1;
 
     // State management
     const [isTextEditing, setIsTextEditing] = useState(false);
@@ -193,28 +197,26 @@ const DraggableItem = React.memo<DraggableItemProps>(
     );
 
     /**
-     * Helper to clean up drag state
-     */
-    const cleanupDragState = useCallback(() => {
-      setIsDragging(false);
-      setResizeHandle(null);
-      panStateRef.current.isActive = false;
-      panStateRef.current.moved = false;
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-      velocityTrackerRef.current.reset();
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-    }, []);
-
-    /**
      * PAN UPDATE - Mouse move handler
      * Continuously syncs to store (like Flutter broadcast)
      */
     useEffect(() => {
       if (!isDragging || !panStateRef.current.isActive) return;
+
+      // IMPORTANT: Define cleanup before handlers so it can be called from handlers
+      const performCleanup = () => {
+        panStateRef.current.isActive = false;
+        panStateRef.current.moved = false;
+        setIsDragging(false);
+        setResizeHandle(null);
+        if (frameRef.current !== null) {
+          cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
+        }
+        velocityTrackerRef.current.reset();
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
 
       const handleMouseMove = (event: MouseEvent) => {
         event.preventDefault();
@@ -322,23 +324,34 @@ const DraggableItem = React.memo<DraggableItemProps>(
             });
           } else {
             // ===== DRAG LOGIC =====
-            // Element follows cursor directly with no offset
-            // Position = startElementPos + totalDragDelta
             const newX = panStateRef.current.startElementX + scaledDeltaX;
             const newY = panStateRef.current.startElementY + scaledDeltaY;
 
-            // Bounds check
             const elementWidthPx = percentToPixels(element.width, 'x');
             const elementHeightPx = percentToPixels(element.height, 'y');
-
             const constrainedX = Math.max(0, Math.min(newX, canvasWidth - elementWidthPx));
             const constrainedY = Math.max(0, Math.min(newY, canvasHeight - elementHeightPx));
 
-            // Update store with absolute position
             updateElement(element.id, {
               x: pixelsToPercent(constrainedX, 'x'),
               y: pixelsToPercent(constrainedY, 'y'),
             });
+
+            // Move all OTHER multi-selected elements by the same pixel delta
+            const multiIds = useEditorStore.getState().selectedElementIds;
+            if (multiIds.length > 1) {
+              const dxPct = pixelsToPercent(constrainedX, 'x') - element.x;
+              const dyPct = pixelsToPercent(constrainedY, 'y') - element.y;
+              multiIds.forEach((mid) => {
+                if (mid === element.id) return;
+                const other = useEditorStore.getState().elements.find((e) => e.id === mid);
+                if (!other || other.id.startsWith('system-boundary-')) return;
+                useEditorStore.getState().updateElement(mid, {
+                  x: Math.max(0, Math.min(100 - other.width, other.x + dxPct)),
+                  y: Math.max(0, Math.min(100 - other.height, other.y + dyPct)),
+                });
+              });
+            }
           }
 
           frameRef.current = null;
@@ -349,14 +362,12 @@ const DraggableItem = React.memo<DraggableItemProps>(
         // Reject non-left-click mouse up (right click, middle click, etc)
         if (event.button !== 0) return;
 
-        const cleanup = () => {
-          cleanupDragState();
-          window.removeEventListener('mousemove', handleMouseMove);
-          window.removeEventListener('mouseup', handleMouseUp);
-        };
+        // ALWAYS clean up immediately on mouse up
+        const isResizing = resizeHandle !== null;
+        const hasMoved = panStateRef.current.moved;
 
-        // Apply momentum if dragging (not resizing)
-        if (!resizeHandle && panStateRef.current.moved) {
+        // Apply momentum if dragging (not resizing) and we have velocity
+        if (!isResizing && hasMoved) {
           const { vx, vy } = velocityTrackerRef.current.getSmoothedVelocity();
 
           if (
@@ -367,7 +378,13 @@ const DraggableItem = React.memo<DraggableItemProps>(
 
             let frameIndex = 0;
             const applyMomentumFrame = () => {
-              if (frameIndex < momentumFrames.length && panStateRef.current.moved) {
+              // SAFETY CHECK: If drag was ended externally, stop momentum
+              if (!panStateRef.current.moved) {
+                performCleanup();
+                return;
+              }
+
+              if (frameIndex < momentumFrames.length) {
                 const { dx, dy } = momentumFrames[frameIndex];
 
                 // Apply momentum as absolute delta
@@ -389,18 +406,18 @@ const DraggableItem = React.memo<DraggableItemProps>(
                 frameRef.current = requestAnimationFrame(applyMomentumFrame);
               } else {
                 frameRef.current = null;
-                cleanup();
+                performCleanup();
               }
             };
 
             frameRef.current = requestAnimationFrame(applyMomentumFrame);
           } else {
-            // No momentum
-            cleanup();
+            // No meaningful velocity - clean up immediately
+            performCleanup();
           }
         } else {
-          // Resize or no movement
-          cleanup();
+          // Resize or no movement - clean up immediately
+          performCleanup();
         }
       };
 
@@ -408,10 +425,14 @@ const DraggableItem = React.memo<DraggableItemProps>(
       window.addEventListener('mouseup', handleMouseUp);
 
       return () => {
+        // Clean up event listeners
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        
+        // SAFETY: Ensure drag state is fully cleaned up on effect unmount
         if (frameRef.current !== null) {
           cancelAnimationFrame(frameRef.current);
+          frameRef.current = null;
         }
       };
     }, [
@@ -424,7 +445,6 @@ const DraggableItem = React.memo<DraggableItemProps>(
       updateElement,
       pixelsToPercent,
       percentToPixels,
-      cleanupDragState,
     ]);
 
     /**
@@ -478,16 +498,21 @@ const DraggableItem = React.memo<DraggableItemProps>(
       [element.x, element.y, element.width, element.height, element.rotation, element.zIndex, element.visible, isSystemBoundary, isDragging]
     );
 
-    // Selection border style
+    // Selection border style — blue for primary, orange for multi-selected
     const borderStyle: React.CSSProperties = isSelected
       ? {
           border: `2px solid ${selectionColor}`,
           boxShadow: `inset 0 0 0 1px ${selectionColor}33, ${selectionColor}22 0 0 0 4px`,
           outlineOffset: '-2px',
         }
-      : {
-          border: '2px solid transparent',
-        };
+      : isMultiSelected
+        ? {
+            border: '2px solid #f97316',
+            boxShadow: 'inset 0 0 0 1px #f9731633, #f9731622 0 0 0 4px',
+          }
+        : {
+            border: '2px solid transparent',
+          };
 
     // Resize handle component
     const ResizeHandle: React.FC<{ handle: ResizeHandle }> = ({ handle }) => (
@@ -529,7 +554,12 @@ const DraggableItem = React.memo<DraggableItemProps>(
         onMouseDown={handleDragStart}
         onClick={(e) => {
           e.stopPropagation();
-          onSelect(e);
+          if (e.shiftKey && !isSystemBoundary) {
+            // Shift+click → toggle multi-select
+            toggleElementSelection(element.id);
+          } else {
+            onSelect(e);
+          }
         }}
         onDoubleClick={handleDoubleClick}
       >
@@ -542,7 +572,7 @@ const DraggableItem = React.memo<DraggableItemProps>(
           }}
         >
           {/* Element Content */}
-          <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '100%' }}>
             {element.type === 'text' &&
               (isTextEditing ? (
                 <textarea
@@ -634,7 +664,9 @@ const DraggableItem = React.memo<DraggableItemProps>(
                 style={{
                   width: '100%',
                   height: '100%',
-                  backgroundColor: element.backgroundColor,
+                  background: element.gradientEnabled
+                    ? `linear-gradient(${element.gradientAngle ?? 135}deg, ${element.gradientFrom ?? '#e2e8f0'}, ${element.gradientTo ?? '#94a3b8'})`
+                    : (element.backgroundColor || 'transparent'),
                   border:
                     element.strokePosition === 'outside'
                       ? 'none'
@@ -644,9 +676,16 @@ const DraggableItem = React.memo<DraggableItemProps>(
                       ? `${element.borderWidth || 0}px solid ${element.borderColor || '#000000'}`
                       : undefined,
                   boxSizing: element.strokePosition === 'outside' ? 'content-box' : 'border-box',
-                  borderRadius: element.shapeType === 'circle' ? '50%' : '0',
+                  borderRadius: element.shapeType === 'circle'
+                    ? '50%'
+                    : element.borderRadius
+                      ? `${element.borderRadius}px`
+                      : '0',
+                  clipPath: element.shapeType === 'triangle'
+                    ? 'polygon(50% 0%, 0% 100%, 100% 100%)'
+                    : undefined,
                   opacity: element.opacity ?? 1,
-                  boxShadow: shadowStyle,
+                  boxShadow: shadowStyle !== 'none' ? shadowStyle : undefined,
                   pointerEvents: 'none',
                 }}
               />

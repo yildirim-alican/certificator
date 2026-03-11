@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { CertificateTemplate } from '@/types/CertificateTemplate';
 
 interface TemplateStoreState {
@@ -14,27 +15,32 @@ interface TemplateStoreState {
   setError: (error: string | null) => void;
 }
 
-export const useTemplateStore = create<TemplateStoreState>((set) => ({
-  templates: [],
-  loading: false,
-  error: null,
+export const useTemplateStore = create<TemplateStoreState>()(
+  persist(
+    (set) => ({
+      templates: [],
+      loading: false,
+      error: null,
 
-  setTemplates: (templates) => set({ templates }),
-  addTemplate: (template) =>
-    set((state) => ({
-      templates: [...state.templates, template],
-    })),
+      setTemplates: (templates) => set({ templates }),
+      addTemplate: (template) =>
+        set((state) => ({
+          templates: [...state.templates, template],
+        })),
 
-  updateTemplate: (id, template) =>
-    set((state) => ({
-      templates: state.templates.map((t) => (t.id === id ? template : t)),
-    })),
+      updateTemplate: (id, template) =>
+        set((state) => ({
+          templates: state.templates.map((t) => (t.id === id ? template : t)),
+        })),
 
-  deleteTemplate: (id) =>
-    set((state) => ({
-      templates: state.templates.filter((t) => t.id !== id),
-    })),
+      deleteTemplate: (id) =>
+        set((state) => ({
+          templates: state.templates.filter((t) => t.id !== id),
+        })),
 
-  setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error }),
-}));
+      setLoading: (loading) => set({ loading }),
+      setError: (error) => set({ error }),
+    }),
+    { name: 'certificator-templates' }
+  )
+);

@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { CertificateTemplate } from '@/types/CertificateTemplate';
 import { usePrinter } from '@/hooks/usePrinter';
 import Button from '@/components/shared/Button';
-import { Download, X, Eye, Loader } from 'lucide-react';
+import CertificatePreview from '@/components/shared/CertificatePreview';
+import { Download, X } from 'lucide-react';
 
 interface ExportModalProps {
   template: CertificateTemplate;
@@ -27,25 +28,10 @@ const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { generatePDF, generatePreview } = usePrinter();
+  const { generatePDF } = usePrinter();
   const [fileName, setFileName] = useState(`${template.name}.pdf`);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleGeneratePreview = async () => {
-    setPreviewLoading(true);
-    setError(null);
-    try {
-      const result = await generatePreview(template, data);
-      setPreviewUrl(result.url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate preview');
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
 
   const handleDownload = async () => {
     setIsGenerating(true);
@@ -81,42 +67,16 @@ const ExportModal: React.FC<ExportModalProps> = ({
           {/* Preview Section */}
           <div className="border-r border-gray-200 pr-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Preview</h3>
-
-            {previewUrl ? (
-              <div className="bg-gray-100 rounded-lg p-4 mb-4">
-                <iframe
-                  src={previewUrl}
-                  className="w-full h-96 border border-gray-300 rounded"
-                  title="PDF Preview"
-                />
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-lg p-8 mb-4 flex flex-col items-center justify-center h-96">
-                {previewLoading ? (
-                  <>
-                    <Loader className="animate-spin text-blue-600 mb-2" size={32} />
-                    <p className="text-gray-600">Generating preview...</p>
-                  </>
-                ) : (
-                  <>
-                    <Eye className="text-gray-400 mb-2" size={48} />
-                    <p className="text-gray-600 text-center">
-                      Click &quot;Generate Preview&quot; to see how your certificate will look
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-
-            <Button
-              variant="secondary"
-              onClick={handleGeneratePreview}
-              disabled={previewLoading}
-              className="w-full flex items-center justify-center gap-2"
-            >
-              <Eye size={18} />
-              {previewLoading ? 'Generating...' : 'Generate Preview'}
-            </Button>
+            <div className="bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+              <CertificatePreview
+                template={template}
+                data={data}
+                displayWidth={340}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              Live preview — actual PDF may vary slightly in font rendering.
+            </p>
           </div>
 
           {/* Download Section */}

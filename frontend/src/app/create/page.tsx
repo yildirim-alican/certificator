@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 export default function CreateTemplatePage() {
   const router = useRouter();
@@ -11,9 +12,5 @@ export default function CreateTemplatePage() {
     router.replace(`/editor/${templateId}`);
   }, [router]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <p className="text-sm text-gray-600">Redirecting to design editor...</p>
-    </div>
-  );
+  return <LoadingSkeleton />;
 }

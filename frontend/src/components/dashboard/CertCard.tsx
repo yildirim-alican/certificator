@@ -5,6 +5,7 @@ import { CertificateTemplate } from '@/types/CertificateTemplate';
 import Button from '@/components/shared/Button';
 import { CERTIFICATE_TYPES } from '@/lib/premiumTemplates';
 import QuickEdit, { QuickEditData } from '@/components/editor/QuickEdit';
+import CertificatePreview from '@/components/shared/CertificatePreview';
 import { Zap } from 'lucide-react';
 
 interface CertCardProps {
@@ -33,19 +34,12 @@ const CertCard: React.FC<CertCardProps> = ({ template, onEdit, onDelete }) => {
     <>
       <div className="bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all overflow-hidden">
         {/* Template Thumbnail */}
-        <div className="bg-gray-50 h-48 flex items-center justify-center relative overflow-hidden">
-          {template.thumbnail ? (
-            <img
-              src={template.thumbnail}
-              alt={template.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="text-center">
-              <p className="text-gray-500 text-sm">No Preview</p>
-              <p className="text-xs text-gray-400 mt-1">{template.orientation}</p>
-            </div>
-          )}
+        <div className="bg-gray-50 h-28 flex items-center justify-center relative overflow-hidden">
+          <CertificatePreview
+            template={template}
+            displayWidth={template.orientation === 'landscape' ? 200 : 140}
+            className="rounded shadow-sm"
+          />
           
           {/* Premium Badge */}
           {template.isPremium && (
@@ -56,7 +50,7 @@ const CertCard: React.FC<CertCardProps> = ({ template, onEdit, onDelete }) => {
         </div>
 
         {/* Card Content */}
-        <div className="p-4">
+        <div className="p-3">
           {/* Category & Title */}
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1">
@@ -71,29 +65,12 @@ const CertCard: React.FC<CertCardProps> = ({ template, onEdit, onDelete }) => {
           </div>
 
           {/* Description */}
-          <p className="text-sm text-gray-600 mb-4 line-clamp-2 h-10">
-            {template.description || 'Professional certificate template'}
+          <p className="text-xs text-gray-600 mb-3 line-clamp-1">
+            {template.description || 'Professional template'}
           </p>
 
-          {/* Variables */}
-          {template.variables && template.variables.length > 0 && (
-            <div className="mb-4 pb-4 border-t border-gray-100">
-              <p className="text-xs font-medium text-gray-500 uppercase mb-2">Variables</p>
-              <div className="flex flex-wrap gap-1">
-                {template.variables.map((variable) => (
-                  <span
-                    key={variable}
-                    className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded font-mono"
-                  >
-                    {variable}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Actions */}
-          <div className="flex gap-2 pt-4 border-t border-gray-100">
+          <div className="flex gap-2 pt-3 border-t border-gray-100">
             <Button
               size="sm"
               variant="primary"

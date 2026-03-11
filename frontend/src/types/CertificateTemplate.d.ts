@@ -27,11 +27,16 @@ export interface CertificateElement {
   opacity?: number;
 
   // Shape-specific
-  shapeType?: 'rectangle' | 'circle' | 'line';
+  shapeType?: 'rectangle' | 'circle' | 'line' | 'triangle';
   borderColor?: string;
   borderWidth?: number;
   strokePosition?: 'inside' | 'center' | 'outside';
   backgroundColor?: string;
+  borderRadius?: number;        // px, for rounded corners on rectangles
+  gradientEnabled?: boolean;
+  gradientFrom?: string;
+  gradientTo?: string;
+  gradientAngle?: number;       // 0-360 degrees
 
   // Effects
   shadowColor?: string;

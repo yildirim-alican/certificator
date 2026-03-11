@@ -5,17 +5,10 @@
  * Provides global styles and layout structure.
  */
 
-import React from 'react';
-import type { Metadata } from 'next';
+import React, { Suspense } from 'react';
 import '../styles/globals.css';
-
-export const metadata: Metadata = {
-  title: 'CertifyPro - Certificate Management System',
-  description: 'Enterprise certificate asset management platform',
-  icons: {
-    icon: '/favicon.ico',
-  },
-};
+import LoadingSkeleton from '@/components/LoadingSkeleton';
+import { ClientLayoutWrapper } from './ClientLayoutWrapper';
 
 export default function RootLayout({
   children,
@@ -23,11 +16,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <title>Certificator - Certificate Generator</title>
+        <meta name="description" content="Certificate design and generator platform" />
+        <link rel="icon" href="/favicon.ico" />
+      </head>
       <body className="antialiased bg-gray-50">
-        <div className="min-h-screen flex flex-col">
-          {children}
-        </div>
+        <ClientLayoutWrapper>
+          <div className="min-h-screen flex flex-col">
+            <Suspense fallback={<LoadingSkeleton />}>
+              {children}
+            </Suspense>
+          </div>
+        </ClientLayoutWrapper>
       </body>
     </html>
   );

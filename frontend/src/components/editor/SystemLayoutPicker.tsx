@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Button from '@/components/shared/Button';
-import { LayoutTemplate, CheckCircle2, Crown, Layers, Palette } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Upload } from 'lucide-react';
 import {
   LayoutCategory,
   LayoutOrientation,
@@ -15,9 +14,16 @@ interface SystemLayoutPickerProps {
   activeOrientation: LayoutOrientation;
   onApplyPreset: (preset: SystemLayoutPreset) => void;
   onOrientationChange: (orientation: LayoutOrientation) => void;
-  onIssuerLogoUpload: (file: File) => void;
-  onSponsorLogoUpload: (file: File, logoIndex?: number) => void;
+  onBrandLogoUpload: (file: File, logoIndex?: number) => void;
+  brandLogos?: string[];
+  onRemoveBrandLogo?: (index: number) => void;
 }
+
+const CATEGORIES: Array<{ id: LayoutCategory; label: string }> = [
+  { id: 'digital', label: 'Digital' },
+  { id: 'minimal', label: 'Minimal' },
+  { id: 'modern', label: 'Modern' },
+];
 
 const SystemLayoutPicker: React.FC<SystemLayoutPickerProps> = ({
   presets,
@@ -25,151 +31,177 @@ const SystemLayoutPicker: React.FC<SystemLayoutPickerProps> = ({
   activeOrientation,
   onApplyPreset,
   onOrientationChange,
-  onIssuerLogoUpload,
-  onSponsorLogoUpload,
+  onBrandLogoUpload,
+  brandLogos = [],
+  onRemoveBrandLogo,
 }) => {
   const [activeCategory, setActiveCategory] = useState<LayoutCategory>('digital');
+  const [showLogos, setShowLogos] = useState(false);
 
   const visiblePresets = useMemo(
-    () => presets.filter((preset) => preset.category === activeCategory && preset.orientation === activeOrientation),
+    () =>
+      presets.filter(
+        (p) => p.category === activeCategory && p.orientation === activeOrientation
+      ),
     [presets, activeCategory, activeOrientation]
   );
 
-  const categoryOptions: Array<{ id: LayoutCategory; label: string; icon: React.ReactNode }> = [
-    { id: 'digital', label: 'Digital', icon: <Layers size={14} /> },
-    { id: 'minimal', label: 'Minimal', icon: <Palette size={14} /> },
-    { id: 'modern', label: 'Modern', icon: <Crown size={14} /> },
-  ];
-
   return (
-    <div>
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">Certificate Layout Library</h3>
-        <p className="text-sm text-gray-600">
-          Pick a premium starter layout, then fine-tune details in Quick Edit.
-        </p>
-      </div>
-
-      <div className="mb-4 rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 p-3">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">A4 Orientation</div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant={activeOrientation === 'portrait' ? 'primary' : 'secondary'}
-            onClick={() => onOrientationChange('portrait')}
-            className="w-full"
+    <div className="p-4 space-y-4">
+      {/* Orientation segmented control */}
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+        {(['landscape', 'portrait'] as LayoutOrientation[]).map((o) => (
+          <button
+            key={o}
+            onClick={() => onOrientationChange(o)}
+            className={`flex-1 px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeOrientation === o
+                ? 'bg-gray-900 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
           >
-            A4 Portrait
-          </Button>
-          <Button
-            variant={activeOrientation === 'landscape' ? 'primary' : 'secondary'}
-            onClick={() => onOrientationChange('landscape')}
-            className="w-full"
+            {o === 'landscape' ? 'Landscape' : 'Portrait'}
+          </button>
+        ))}
+      </div>
+
+      {/* Category pills */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
+              activeCategory === cat.id
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
           >
-            A4 Landscape
-          </Button>
-        </div>
+            {cat.label}
+          </button>
+        ))}
       </div>
 
-      <div className="mb-5 rounded-xl border border-gray-200 bg-white p-3">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Certificate Type</div>
-        <div className="space-y-2">
-          {categoryOptions.map((option) => {
-            const isActive = activeCategory === option.id;
-            return (
-              <button
-                key={option.id}
-                onClick={() => setActiveCategory(option.id)}
-                className={`w-full px-3 py-2 rounded-lg border text-sm flex items-center justify-between transition ${
-                  isActive
-                    ? 'bg-blue-50 border-blue-300 text-blue-700'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  {option.icon}
-                  {option.label}
-                </span>
-                {isActive && <CheckCircle2 size={16} />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-3">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Brand Assets</div>
-        <div className="space-y-2">
-          <label className="block text-xs text-gray-600">Issuer Logo</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onIssuerLogoUpload(file);
-            }}
-            className="w-full text-xs border border-gray-300 rounded px-2 py-2"
-          />
-
-          <label className="block text-xs text-gray-600 mt-2">Sponsor Logo</label>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              files.forEach((file, index) => onSponsorLogoUpload(file, index));
-            }}
-            className="w-full text-xs border border-gray-300 rounded px-2 py-2"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-3">
+      {/* Preset grid */}
+      <div className="grid grid-cols-2 gap-2">
         {visiblePresets.map((preset) => {
           const isActive = preset.id === activePresetId;
           return (
-            <div
+            <button
               key={preset.id}
-              className={`border rounded-xl p-4 transition shadow-sm ${
+              onClick={() => onApplyPreset(preset)}
+              className={`group relative rounded-lg border p-2 text-left transition-all ${
                 isActive
-                  ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? 'border-gray-900 bg-gray-900'
+                  : 'border-gray-200 bg-white hover:border-gray-400'
               }`}
             >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <h4 className="font-semibold text-gray-900">{preset.name}</h4>
-                  <p className="text-xs text-gray-600 mt-1">{preset.description}</p>
-                </div>
-                {isActive ? <CheckCircle2 className="text-blue-600" size={18} /> : <LayoutTemplate className="text-gray-400" size={18} />}
-              </div>
-
-              <div className="mb-3 h-14 rounded-lg border border-gray-200 bg-gradient-to-r from-gray-50 via-white to-gray-50 flex items-center px-3">
-                <div className="w-2 h-8 rounded-full bg-blue-400 mr-3" />
-                <div className="space-y-1 w-full">
-                  <div className="h-2 w-2/3 rounded bg-gray-300" />
-                  <div className="h-2 w-1/2 rounded bg-gray-200" />
-                </div>
-              </div>
-
-              <div className="text-xs text-gray-600 mb-3">
-                Variables: {preset.variables.join(', ')}
-              </div>
-
-              <Button
-                variant={isActive ? 'secondary' : 'primary'}
-                onClick={() => onApplyPreset(preset)}
-                className="w-full"
+              {/* Mini preview */}
+              <div
+                className={`h-10 rounded mb-2 flex items-center px-1.5 ${
+                  isActive ? 'bg-gray-700' : 'bg-gray-50 border border-gray-100'
+                }`}
               >
-                {isActive ? 'Re-Apply Layout' : 'Use This Layout'}
-              </Button>
-            </div>
+                <div
+                  className={`w-1 h-6 rounded-full mr-1.5 flex-shrink-0 ${
+                    isActive ? 'bg-white/60' : 'bg-blue-400'
+                  }`}
+                />
+                <div className="space-y-1 flex-1">
+                  <div
+                    className={`h-1.5 w-3/4 rounded ${
+                      isActive ? 'bg-white/40' : 'bg-gray-300'
+                    }`}
+                  />
+                  <div
+                    className={`h-1.5 w-1/2 rounded ${
+                      isActive ? 'bg-white/20' : 'bg-gray-200'
+                    }`}
+                  />
+                </div>
+                {isActive && (
+                  <CheckCircle2 size={12} className="text-white flex-shrink-0" />
+                )}
+              </div>
+              <p
+                className={`text-[11px] font-medium leading-tight truncate ${
+                  isActive ? 'text-white' : 'text-gray-700'
+                }`}
+              >
+                {preset.name}
+              </p>
+            </button>
           );
         })}
-
         {visiblePresets.length === 0 && (
-          <div className="border border-dashed border-gray-300 rounded-lg p-4 text-sm text-gray-600">
-            No templates found for this type and orientation.
+          <div className="col-span-2 border border-dashed border-gray-200 rounded-lg p-4 text-xs text-gray-400 text-center">
+            No layouts for this combination.
+          </div>
+        )}
+      </div>
+
+      {/* Brand logos collapsible */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <button
+          onClick={() => setShowLogos((v) => !v)}
+          className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <span className="flex items-center gap-1.5">
+            <Upload size={12} />
+            Logo Yönetimi
+          </span>
+          <ChevronDown
+            size={14}
+            className={`transition-transform text-gray-400 ${showLogos ? 'rotate-180' : ''}`}
+          />
+        </button>
+        {showLogos && (
+          <div className="px-3 pb-3 pt-3 space-y-3 border-t border-gray-100">
+            <div className="text-xs text-gray-500 mb-1">
+              Tüm logolar sponsor logo tekniği ile yüklenir
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {brandLogos.map((logo, index) => (
+                <div
+                  key={index}
+                  className="relative group"
+                >
+                  <div className="w-16 h-14 rounded border border-gray-300 bg-gray-50 overflow-hidden flex items-center justify-center">
+                    <img
+                      src={logo}
+                      alt={`Logo ${index + 1}`}
+                      className="max-w-full max-h-full object-contain p-1"
+                    />
+                  </div>
+                  <div className="absolute -top-6 left-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10">
+                    Logo {index + 1}
+                  </div>
+                  <button
+                    onClick={() => onRemoveBrandLogo?.(index)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs hover:bg-red-600 shadow-md transition-colors"
+                    title="Logoyu kaldır"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <label
+                className="w-16 h-14 rounded border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 text-xs text-gray-400 hover:text-blue-600 font-medium relative group"
+                title="Logo eklemek için tıkla"
+              >
+                <span className="text-lg">+</span>
+                <span className="text-[10px]">Logo Ekle</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onBrandLogoUpload(file, brandLogos.length);
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
         )}
       </div>

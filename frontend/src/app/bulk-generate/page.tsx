@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useEditorStore } from '@/store/useEditorStore';
 import { useTemplateStore } from '@/store/useTemplateStore';
+import { usePrinter } from '@/hooks/usePrinter';
 import BulkGenerationWorkflow from '@/components/excel/BulkGenerationWorkflow';
 import Button from '@/components/shared/Button';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
@@ -23,6 +24,7 @@ export default function BulkGeneratePage() {
   const router = useRouter();
   const editorTemplate = useEditorStore((state) => state.template);
   const savedTemplates = useTemplateStore((state) => state.templates);
+  const { generateBulkPDFs } = usePrinter();
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     editorTemplate?.id || savedTemplates[0]?.id || ''
@@ -63,46 +65,11 @@ export default function BulkGeneratePage() {
     data: Record<string, string>[]
   ): Promise<void> => {
     setGenerationError(null);
-
     try {
-      // Prepare payload
-      const payload = {
-        template: {
-          name: selectedTemplate?.name,
-          orientation: selectedTemplate?.orientation,
-          width: selectedTemplate?.width,
-          height: selectedTemplate?.height,
-          backgroundColor: selectedTemplate?.backgroundColor,
-          elements: selectedTemplate?.elements,
-        },
-        data,
-        fileName: (selectedTemplate?.name || 'certificates').replace(/\s+/g, '-').toLowerCase(),
-      };
-
-      // Call backend API
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/excel/generate-bulk`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Generation failed: ${response.statusText}`);
-      }
-
-      // Download ZIP file
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${payload.fileName}_batch.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const fileName = (selectedTemplate?.name || 'certificates')
+        .replace(/\s+/g, '-')
+        .toLowerCase();
+      await generateBulkPDFs(selectedTemplate!, data, { fileName: `${fileName}_batch.zip` });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error occurred';
       setGenerationError(message);

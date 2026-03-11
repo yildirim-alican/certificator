@@ -8,77 +8,61 @@
  * Minimal 2-column layout with category-based filtering.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTemplateStore } from '@/store/useTemplateStore';
-import { useApi } from '@/hooks/useApi';
 import { CertificateTemplate } from '@/types/CertificateTemplate';
 import CertCard from '@/components/dashboard/CertCard';
 import Input from '@/components/shared/Input';
-import { Search } from 'lucide-react';
-import { CERTIFICATE_TYPES } from '@/lib/premiumTemplates';
-
-type CategoryType =
-  | 'all'
-  | 'achievement'
-  | 'participation'
-  | 'completion'
-  | 'award'
-  | 'diploma'
-  | 'training'
-  | 'workshop'
-  | 'webinar'
-  | 'internship'
-  | 'honor';
+import { Search, Upload, Download } from 'lucide-react';
 
 export default function Dashboard() {
   const router = useRouter();
-  const templates = useTemplateStore((state) => state.templates);
-  const setTemplates = useTemplateStore((state) => state.setTemplates);
-  const { get } = useApi();
+  const templates      = useTemplateStore((state) => state.templates);
+  const deleteTemplate = useTemplateStore((state) => state.deleteTemplate);
+  const setTemplates   = useTemplateStore((state) => state.setTemplates);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType>('all');
-  const [loading, setLoading] = useState(true);
+  const importRef = useRef<HTMLInputElement>(null);
 
-  // Load templates on mount
-  useEffect(() => {
-    const loadTemplates = async () => {
-      setLoading(true);
-      const { data } = await get<CertificateTemplate[]>('/templates');
-      if (data) {
-        setTemplates(data);
-      }
-      setLoading(false);
-    };
-
-    loadTemplates();
-  }, []);
-
-  // Filter templates by search query and category
+  // Filter templates by search query only
   const filteredTemplates = templates.filter((template) => {
-    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || template.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    return template.name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const handleDelete = async (templateId: string) => {
+  const handleDelete = (templateId: string) => {
     if (confirm('Are you sure you want to delete this template?')) {
-      try {
-        const response = await fetch(`/api/templates/${templateId}`, {
-          method: 'DELETE',
-        });
-        if (response.ok) {
-          const updatedTemplates = templates.filter((t) => t.id !== templateId);
-          setTemplates(updatedTemplates);
-        } else {
-          alert('Failed to delete template');
-        }
-      } catch (error) {
-        console.error('Delete error:', error);
-        alert('Error deleting template');
-      }
+      deleteTemplate(templateId);
     }
+  };
+
+  const handleExportAll = () => {
+    const json = JSON.stringify(templates, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'certificator-templates.json';
+    document.body.appendChild(link); link.click();
+    document.body.removeChild(link); URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string);
+        const arr: CertificateTemplate[] = Array.isArray(parsed) ? parsed : [parsed];
+        const existingIds = new Set(templates.map((t) => t.id));
+        const newOnes = arr.filter((t) => !existingIds.has(t.id));
+        if (newOnes.length > 0) setTemplates([...templates, ...newOnes]);
+      } catch {
+        alert('Invalid JSON file');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -91,12 +75,32 @@ export default function Dashboard() {
               <h1 className="text-2xl font-semibold text-gray-900">Certificate Templates</h1>
               <p className="text-sm text-gray-600 mt-1">Choose a template and customize it</p>
             </div>
-            <button
-              onClick={() => router.push('/create')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Create Certificate
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Hidden file input for import */}
+              <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+              <button
+                onClick={() => importRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                title="Import templates from JSON"
+              >
+                <Upload size={16} /> Import
+              </button>
+              {templates.length > 0 && (
+                <button
+                  onClick={handleExportAll}
+                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                  title="Export all templates as JSON"
+                >
+                  <Download size={16} /> Export
+                </button>
+              )}
+              <button
+                onClick={() => router.push('/create')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Create Certificate
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -116,52 +120,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Category Tabs - Minimal Design */}
-        <div className="mb-8 flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              selectedCategory === 'all'
-                ? 'bg-gray-900 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            All
-          </button>
-          {CERTIFICATE_TYPES.map((type) => (
-            <button
-              key={type.id}
-              onClick={() => setSelectedCategory(type.id as CategoryType)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${
-                selectedCategory === type.id
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <span>{type.icon}</span>
-              {type.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-            <p className="mt-4 text-gray-600">Loading templates...</p>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && filteredTemplates.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">No templates found</p>
-            <p className="text-gray-500 mt-2 text-sm">Try adjusting your filters or search terms</p>
-          </div>
-        )}
-
         {/* Templates Grid - 2 Columns */}
-        {!loading && filteredTemplates.length > 0 && (
+        {filteredTemplates.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredTemplates.map((template) => (
               <CertCard
